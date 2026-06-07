@@ -160,12 +160,18 @@ def paste_logo(canvas, x_coord, y_coord, size=90):
 
 def F(size, bold=True, impact=False):
     if impact:
+        local_path = BASE_DIR / "assets" / "fonts" / "Anton-Regular.ttf"
+        if local_path.exists():
+            return ImageFont.truetype(str(local_path), size)
         font_paths = [
             "C:/Windows/Fonts/impact.ttf",
             "C:/Windows/Fonts/arialbd.ttf",
             "/usr/share/fonts/truetype/msttcorefonts/Impact.ttf",
         ]
     elif bold:
+        local_path = BASE_DIR / "assets" / "fonts" / "Roboto-Bold.ttf"
+        if local_path.exists():
+            return ImageFont.truetype(str(local_path), size)
         font_paths = [
             "C:/Windows/Fonts/arialbd.ttf",
             "C:/Windows/Fonts/verdanab.ttf",
@@ -175,6 +181,9 @@ def F(size, bold=True, impact=False):
             "/System/Library/Fonts/Helvetica.ttc",
         ]
     else:
+        local_path = BASE_DIR / "assets" / "fonts" / "Roboto-Regular.ttf"
+        if local_path.exists():
+            return ImageFont.truetype(str(local_path), size)
         font_paths = [
             "C:/Windows/Fonts/arial.ttf",
             "C:/Windows/Fonts/verdana.ttf",

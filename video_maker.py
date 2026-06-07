@@ -96,6 +96,7 @@ def overlay_subtitles(video_clip, srt_content):
     # Pre-load best available system bold font
     font = None
     font_paths = [
+        "assets/fonts/Roboto-Bold.ttf",
         "C:/Windows/Fonts/impact.ttf",
         "C:/Windows/Fonts/arialbd.ttf",
         "/usr/share/fonts/truetype/msttcorefonts/Impact.ttf",
