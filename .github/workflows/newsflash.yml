@@ -5,6 +5,9 @@ on:
     - cron: '0 3,8,12,15 * * *' # Runs at 8:30 AM, 1:30 PM, 5:30 PM, and 8:30 PM IST (3:00, 8:00, 12:00, 15:00 UTC)
   workflow_dispatch: # Allows manual trigger on GitHub web UI
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 permissions:
   contents: write # Required to push SQLite database updates back to the repository
 
