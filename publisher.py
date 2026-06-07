@@ -181,7 +181,7 @@ def post_reel(video_path, caption):
         is_finished = False
         for i in range(60): # Wait up to 300 seconds (60 * 5s)
             status_res = requests.get(
-                f"{GRAPH}/{container_id}?fields=status_code,status,error_description&access_token={IG_TOKEN}",
+                f"{GRAPH}/{container_id}?fields=status_code&access_token={IG_TOKEN}",
                 timeout=REQUEST_TIMEOUT
             )
             status_data = status_res.json()
@@ -192,8 +192,7 @@ def post_reel(video_path, caption):
                 is_finished = True
                 break
             elif status_code == "ERROR":
-                err_desc = status_data.get("error_description", "Unknown error during video transcoding.")
-                raise Exception(f"Instagram transcoding error: {err_desc}")
+                raise Exception("Instagram transcoding error: Video transcoding failed on Instagram's servers.")
             
             time.sleep(5)
             
