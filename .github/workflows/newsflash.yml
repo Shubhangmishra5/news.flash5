@@ -54,5 +54,30 @@ jobs:
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        
+        # 1. Backup local runner's database changes
+        cp bot_database.sqlite temp_bot_database.sqlite
+        
+        # 2. Discard local database changes to ensure a clean pull
+        git checkout -- bot_database.sqlite
+        
+        # 3. Pull latest remote changes (code and database state)
+        git pull --rebase
+        
+        # 4. Merge the new posted stories back into the pulled database using SQL
+        python -c "
+        import sqlite3, os
+        if os.path.exists('temp_bot_database.sqlite'):
+            conn = sqlite3.connect('bot_database.sqlite')
+            conn.execute(\"ATTACH 'temp_bot_database.sqlite' AS temp_db\")
+            conn.execute(\"INSERT OR IGNORE INTO posted_articles (title, posted_at) SELECT title, posted_at FROM temp_db.posted_articles\")
+            conn.commit()
+            conn.close()
+            os.remove('temp_bot_database.sqlite')
+            print('Successfully merged database state at SQL level!')
+        "
+        
+        # 5. Commit and push the cleanly merged database state
         git add bot_database.sqlite
-        git diff-index --quiet HEAD || (git commit -m "chore: update database state [skip ci]" && git pull --rebase && git push)
+        git diff-index --quiet HEAD || git commit -m "chore: update database state [skip ci]"
+        git push
