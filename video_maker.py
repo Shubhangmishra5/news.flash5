@@ -243,13 +243,19 @@ def generate_video(image_path, audio_path, srt_content, output_video_path, bg_mu
     # 3. Add dynamic text subtitles
     captioned_clip = overlay_subtitles(zoomed_clip, srt_content)
     
-    video = captioned_clip.with_audio(audio_clip)
+    # 4. Pad the 1080x1350 clip into a standard 1080x1920 (9:16) Reels canvas
+    from moviepy import ColorClip, CompositeVideoClip
+    background = ColorClip(size=(1080, 1920), color=(12, 5, 8)).with_duration(duration)
+    padded_clip = CompositeVideoClip([background, captioned_clip.with_position("center")])
+    
+    video = padded_clip.with_audio(audio_clip)
     
     video.write_videofile(
         output_video_path,
         fps=24,
         codec="libx264",
         audio_codec="aac",
+        ffmpeg_params=["-pix_fmt", "yuv420p"],
         logger=None
     )
     
@@ -330,13 +336,19 @@ def create_digest_reel(articles, image_paths):
     mixed_audio = mix_background_music(final_audio, bg_music_path)
     final_video = final_video.with_audio(mixed_audio)
     
+    # 5. Fit/Pad the 1080x1350 video onto a 1080x1920 (9:16) Reels canvas
+    from moviepy import ColorClip, CompositeVideoClip
+    background = ColorClip(size=(1080, 1920), color=(12, 5, 8)).with_duration(final_video.duration)
+    final_video_padded = CompositeVideoClip([background, final_video.with_position("center")]).with_audio(mixed_audio)
+    
     video_path = str(OUTPUT_DIR / f"digest_reel_{datetime.now().strftime('%H%M%S')}.mp4")
     
-    final_video.write_videofile(
+    final_video_padded.write_videofile(
         video_path,
         fps=24,
         codec="libx264",
         audio_codec="aac",
+        ffmpeg_params=["-pix_fmt", "yuv420p"],
         logger=None
     )
     
