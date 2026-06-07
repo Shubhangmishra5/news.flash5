@@ -67,15 +67,15 @@ TWITTER_ACCESS_SECRET = _env("TWITTER_ACCESS_SECRET", "YOUR_TWITTER_ACCESS_SECRE
 ENABLE_TWITTER = _env("ENABLE_TWITTER", "False").lower() == "true"
 
 COLORS = {
-    "red": (200, 20, 30),
-    "dark_red": (140, 10, 20),
-    "maroon": (90, 5, 15),
-    "deep": (35, 5, 45),
+    "red": (230, 30, 45),       # Vibrant premium crimson
+    "dark_red": (120, 10, 15),   # Muted elegant red
+    "maroon": (60, 5, 10),       # Rich deep maroon
+    "deep": (15, 15, 25),        # Deep slate/navy
     "white": (255, 255, 255),
-    "offwhite": (230, 220, 220),
-    "dark_bg": (12, 5, 8),
-    "bar": (18, 8, 12),
-    "light_grey": (242, 238, 238),
+    "offwhite": (245, 245, 247), # Modern off-white
+    "dark_bg": (10, 11, 16),     # Sleek modern dark background
+    "bar": (20, 22, 30),         # Slate grey bar background
+    "light_grey": (240, 240, 245),
 }
 
 DIGEST_SIZE = _env_int("DIGEST_SIZE", 6, minimum=3, maximum=8)

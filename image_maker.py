@@ -148,6 +148,25 @@ def _gradient(width, height):
     return image
 
 
+def get_category_color(category):
+    cat = str(category).upper().strip()
+    if cat in ["INDIA", "NATIONAL", "DELHI"]:
+        return (245, 124, 0)      # Saffron Orange
+    elif cat in ["WORLD", "GLOBAL", "INTERNATIONAL"]:
+        return (0, 122, 255)      # Electric Blue
+    elif cat in ["BUSINESS", "FINANCE", "STARTUPS", "ECONOMY"]:
+        return (16, 185, 129)     # Emerald Green
+    elif cat in ["TECH", "TECHNOLOGY", "SCIENCE", "AI"]:
+        return (6, 182, 212)      # Cyan/Teal
+    elif cat in ["SPORTS"]:
+        return (245, 158, 11)     # Amber Gold
+    elif cat in ["ENTERTAINMENT", "BOLLYWOOD"]:
+        return (168, 85, 247)     # Purple/Magenta
+    elif cat in ["POLITICS", "BREAKING"]:
+        return (230, 30, 45)      # Crimson Red
+    return (230, 30, 45)          # Default red
+
+
 def paste_logo(canvas, x_coord, y_coord, size=90):
     try:
         logo = Image.open(LOGO_FILE).convert("RGBA").resize((size, size), Image.LANCZOS)
@@ -265,51 +284,122 @@ def slide1_main(article, path):
     print("    Slide 1 - MAIN...")
     headline_text = article.get("ai_title") or slide_headline(article, max_chars=95)
     summary_text = article.get("ai_summary") or slide_summary(article, max_chars=150)
-    canvas = Image.new("RGB", (width, height), C["white"])
-    draw_brand_header(canvas, width, label="BREAKING")
+    
+    # 1. Start with a premium dark canvas
+    canvas = Image.new("RGB", (width, height), C["dark_bg"])
+    
+    # 2. Get and paste image in the upper 2/3 (height 820)
+    photo = get_photo(article, width, 820, fit=True)
+    canvas.paste(photo, (0, 0))
+    
+    # 3. Apply a heavy bottom fade to the image so text on top is 100% readable
+    overlay = Image.new('RGBA', canvas.size, (0, 0, 0, 0))
+    draw_ov = ImageDraw.Draw(overlay)
+    
+    fade_start = 320
+    fade_end = 820
+    for y in range(fade_start, fade_end):
+        ratio = (y - fade_start) / (fade_end - fade_start)
+        alpha = int(255 * ratio)
+        draw_ov.line([(0, y), (width, y)], fill=(C["dark_bg"][0], C["dark_bg"][1], C["dark_bg"][2], alpha))
+        
+    # Black out everything below fade_end
+    draw_ov.rectangle([0, fade_end, width, height], fill=(C["dark_bg"][0], C["dark_bg"][1], C["dark_bg"][2], 255))
+    
+    canvas = Image.alpha_composite(canvas.convert('RGBA'), overlay).convert('RGB')
     draw = ImageDraw.Draw(canvas)
-
-    badge_text = "BREAKING" if article.get("breaking") else article["category"].upper()
-    badge_font = F(102, True)
-    badge_box = draw.textbbox((0, 0), badge_text, font=badge_font)
-    badge_x = (width - (badge_box[2] - badge_box[0])) // 2
-    draw.text((badge_x + 3, 174), badge_text, font=badge_font, fill=C["maroon"])
-    draw.text((badge_x, 170), badge_text, font=badge_font, fill=C["red"])
-    draw.line([(badge_x, 278), (badge_x + badge_box[2] - badge_box[0], 278)], fill=C["red"], width=5)
-
-    headline_font = F(62, True)
-    headline_y = 298
-    for line in textwrap.wrap(headline_text.upper(), width=20)[:4]:
-        line_box = draw.textbbox((0, 0), line, font=headline_font)
-        line_x = (width - (line_box[2] - line_box[0])) // 2
-        shadow(draw, (line_x, headline_y), line, headline_font, C["dark_bg"], (190, 185, 185), 2)
-        headline_y += 76
-
-    photo = get_photo(article, width, 500)
-    canvas.paste(photo, (0, 510))
+    
+    # 4. Draw modern transparent brand header at the very top
+    draw_brand_header(canvas, width, transparent=True)
     draw = ImageDraw.Draw(canvas)
-    draw.rectangle([0, 990, width, 1008], fill=C["red"])
-    draw.rectangle([0, 1008, width, 1230], fill=C["dark_bg"])
-
-    summary_y = 1020
-    summary_font = F(44, True)
-    for line in textwrap.wrap(summary_text.upper(), width=25)[:4]:
-        line_box = draw.textbbox((0, 0), line, font=summary_font)
-        line_x = (width - (line_box[2] - line_box[0])) // 2
-        draw.text((line_x, summary_y), line, font=summary_font, fill=C["white"])
-        summary_y += 56
-
-    draw.rectangle([0, 1230, width, 1308], fill=C["maroon"])
-    draw.text((36, 1252), "Follow for breaking news 24/7", font=F(30, False), fill=C["offwhite"])
-    paste_logo(canvas, width - 326, 1238, size=60)
+    
+    # 5. Accent color based on category
+    category_name = article.get("category", "WORLD").upper()
+    accent_color = get_category_color(category_name)
+    
+    # 6. Category / Status Tag at y=180
+    tag_y = 180
+    is_breaking = article.get("breaking")
+    tag_text = "BREAKING NEWS" if is_breaking else category_name
+    tag_bg = C["red"] if is_breaking else accent_color
+    
+    tag_font = F(28, True)
+    tb = draw.textbbox((0, 0), tag_text, font=tag_font)
+    tw = tb[2] - tb[0]
+    th = tb[3] - tb[1]
+    
+    pill_padding_x = 24
+    pill_padding_y = 10
+    pill_w = tw + 2 * pill_padding_x
+    pill_h = th + 2 * pill_padding_y
+    pill_x = 60
+    draw.rounded_rectangle([pill_x, tag_y, pill_x + pill_w, tag_y + pill_h], radius=8, fill=tag_bg)
+    draw.text((pill_x + pill_padding_x, tag_y + pill_padding_y), tag_text, font=tag_font, fill=C["white"])
+    
+    # Thin accent line to the right of the tag
+    draw.line([(pill_x + pill_w + 20, tag_y + pill_h // 2), (width - 60, tag_y + pill_h // 2)], fill=(40, 45, 60), width=3)
+    
+    # 7. Sleek, Premium Headline (starts at y=260)
+    headline_y = 260
+    headline_font = F(64, True)
+    
+    wrapped_headline = textwrap.wrap(headline_text, width=24)[:4]
+    
+    # Draw subtle background glow block for the headline lines
+    panel_layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+    panel_draw = ImageDraw.Draw(panel_layer)
+    _hy = headline_y
+    for line in wrapped_headline:
+        lw = draw.textbbox((0, 0), line, font=headline_font)[2]
+        lh = draw.textbbox((0, 0), line, font=headline_font)[3]
+        panel_draw.rounded_rectangle([50, _hy - 6, 50 + lw + 24, _hy + lh + 6], radius=6, fill=(10, 11, 16, 150))
+        _hy += 76
+    canvas = Image.alpha_composite(canvas.convert("RGBA"), panel_layer).convert("RGB")
     draw = ImageDraw.Draw(canvas)
-    draw.text((width - 254, 1258), PAGE_HANDLE, font=F(30, False), fill=C["red"])
-
-    draw.rectangle([0, 1308, width, 1350], fill=C["light_grey"])
-    source_line = f"Source: {display_source(article['source'])} | Verified | {datetime.now().strftime('%d %b %Y')}"
-    draw.text((36, 1322), source_line, font=F(28, False), fill=(110, 80, 80))
-    center_x(draw, 1290, "Swipe for more context ->", F(26, False), (160, 130, 130), width)
-
+    
+    _hy = headline_y
+    for line in wrapped_headline:
+        draw.text((62, _hy + 2), line, font=headline_font, fill=(0, 0, 0))
+        draw.text((60, _hy), line, font=headline_font, fill=C["white"])
+        _hy += 76
+        
+    # Draw vertical accent bar next to the headline
+    draw.rectangle([44, headline_y, 48, _hy - 16], fill=tag_bg)
+    
+    # 8. Premium Summary Card at the bottom (y=650)
+    summary_y = 650
+    summary_font = F(38, False)
+    wrapped_summary = textwrap.wrap(summary_text, width=44)[:4]
+    
+    card_x1 = 50
+    card_y1 = summary_y - 20
+    card_x2 = width - 50
+    card_y2 = height - 160
+    
+    draw.rounded_rectangle([card_x1, card_y1, card_x2, card_y2], radius=16, fill=(20, 22, 32, 180), outline=(45, 48, 65), width=2)
+    
+    draw.text((74, summary_y), "SUMMARY EXCLUSIVE", font=F(26, True), fill=accent_color)
+    summary_y += 42
+    
+    for line in wrapped_summary:
+        draw.text((74, summary_y), line, font=summary_font, fill=C["offwhite"])
+        summary_y += 50
+        
+    # 9. Bottom Footer Bar (y=1220 onwards)
+    footer_y = 1220
+    draw.line([(50, footer_y - 10), (width - 50, footer_y - 10)], fill=(45, 48, 65), width=2)
+    
+    paste_logo(canvas, 60, footer_y, size=60)
+    draw = ImageDraw.Draw(canvas)
+    draw.text((134, footer_y + 12), PAGE_HANDLE, font=F(32, True), fill=C["white"])
+    
+    swipe_text = "Swipe for context →"
+    sw_w = draw.textbbox((0, 0), swipe_text, font=F(28, True))[2]
+    draw.text((width - 60 - sw_w, footer_y + 14), swipe_text, font=F(28, True), fill=accent_color)
+    
+    source_line = f"Source: {display_source(article['source'])}  |  {datetime.now().strftime('%d %b %Y')}"
+    draw.text((60, footer_y + 80), source_line.upper(), font=F(24, True), fill=(100, 105, 120))
+    
     canvas.save(path, "JPEG", quality=96)
     return path
 
@@ -317,62 +407,125 @@ def slide1_main(article, path):
 def slide2_facts(article, path):
     width, height = 1080, 1350
     print("    Slide 2 - FACTS...")
-    headline_text = slide_headline(article, max_chars=70)
-    summary_text = slide_summary(article, max_chars=180)
+    headline_text = article.get("ai_title") or slide_headline(article, max_chars=75)
+    summary_text = article.get("ai_summary") or slide_summary(article, max_chars=250)
+    
+    # 1. Premium dark background
     canvas = Image.new("RGB", (width, height), C["dark_bg"])
-    draw_brand_header(canvas, width, label="KEY FACTS")
+    draw_brand_header(canvas, width, transparent=True)
     draw = ImageDraw.Draw(canvas)
-
-    draw.rectangle([0, 168, width, 232], fill=C["dark_red"])
-    center_x(draw, 180, "KEY FACTS", F(46, True), C["white"], width)
-
-    title_y = 250
-    for line in textwrap.wrap(headline_text.upper(), width=26)[:2]:
-        line_box = draw.textbbox((0, 0), line, font=F(48, True))
-        line_x = (width - (line_box[2] - line_box[0])) // 2
-        draw.text((line_x, title_y), line, font=F(48, True), fill=C["red"])
-        title_y += 62
-    draw.line([80, title_y + 6, width - 80, title_y + 6], fill=C["dark_red"], width=2)
-
+    
+    # Category accent color
+    category_name = article.get("category", "WORLD").upper()
+    accent_color = get_category_color(category_name)
+    
+    # 2. Header Tag at y=160
+    tag_y = 160
+    tag_text = "KEY FACTS"
+    tag_font = F(24, True)
+    tb = draw.textbbox((0, 0), tag_text, font=tag_font)
+    tw = tb[2] - tb[0]
+    th = tb[3] - tb[1]
+    
+    draw.rounded_rectangle([60, tag_y, 60 + tw + 32, tag_y + th + 16], radius=6, fill=accent_color)
+    draw.text((76, tag_y + 8), tag_text, font=tag_font, fill=C["white"])
+    
+    # 3. Slide Title (Article Headline)
+    title_y = 220
+    title_font = F(46, True)
+    wrapped_title = textwrap.wrap(headline_text, width=38)[:2]
+    for line in wrapped_title:
+        draw.text((60, title_y), line, font=title_font, fill=C["white"])
+        title_y += 56
+        
+    # 4. Vertical Timeline Line
+    timeline_x = 90
+    timeline_start_y = title_y + 30
+    timeline_end_y = 1140
+    draw.line([(timeline_x, timeline_start_y), (timeline_x, timeline_end_y)], fill=(45, 48, 65), width=4)
+    
+    # 5. Extract sentences
     sentences = [item.strip() for item in re.split(r"[.!?]", summary_text) if len(item.strip()) > 20]
     if len(sentences) < 2:
         words = summary_text.split()
         chunk_size = max(len(words) // 4, 1)
         sentences = [" ".join(words[index:index + chunk_size]) for index in range(0, len(words), chunk_size)]
-
+        
     facts = sentences[:4]
-    if len(facts) < 4:
-        facts += [f"Follow {PAGE_HANDLE} for live updates"] * (4 - len(facts))
-
-    facts_y = title_y + 36
+    while len(facts) < 4:
+        facts.append(f"Follow {PAGE_HANDLE} for more live updates on this story.")
+        
+    # Draw facts
+    fact_y = timeline_start_y + 20
+    fact_spacing = (timeline_end_y - timeline_start_y - 40) // 4
+    
     for index, fact in enumerate(facts, start=1):
-        circle_x, circle_y = 52, facts_y
-        draw.ellipse([circle_x, circle_y, circle_x + 66, circle_y + 66], fill=C["red"])
-        number_font = F(40, True)
-        number_box = draw.textbbox((0, 0), str(index), font=number_font)
+        # Draw number bullet circle centered on timeline
+        bullet_r = 24
+        bullet_box = [
+            timeline_x - bullet_r, 
+            fact_y + 6, 
+            timeline_x + bullet_r, 
+            fact_y + 6 + 2 * bullet_r
+        ]
+        
+        # Draw glowing circle border
+        draw.ellipse(bullet_box, fill=(20, 22, 32), outline=accent_color, width=3)
+        
+        # Draw number inside
+        num_str = str(index)
+        num_font = F(26, True)
+        nb = draw.textbbox((0, 0), num_str, font=num_font)
+        nw = nb[2] - nb[0]
+        nh = nb[3] - nb[1]
         draw.text(
             (
-                circle_x + (66 - (number_box[2] - number_box[0])) // 2,
-                circle_y + (66 - (number_box[3] - number_box[1])) // 2,
-            ),
-            str(index),
-            font=number_font,
-            fill=C["white"],
+                timeline_x - nw // 2, 
+                fact_y + 6 + bullet_r - nh // 2 - 2
+            ), 
+            num_str, 
+            font=num_font, 
+            fill=C["white"]
         )
-
-        line_y = facts_y + 6
-        wrapped = textwrap.wrap(shorten(fact, 110), width=28)[:2]
-        for row, line in enumerate(wrapped):
-            font = F(42, True) if row == 0 else F(36, False)
-            draw.text((136, line_y + row * 44), line, font=font, fill=C["offwhite"])
-
-        facts_y += 136
-        draw.line([52, facts_y - 10, width - 52, facts_y - 10], fill=(40, 15, 20), width=1)
-
-    draw.rectangle([0, height - 92, width, height], fill=C["maroon"])
-    draw.text((36, height - 74), "Swipe for visual story ->", font=F(30, False), fill=C["offwhite"])
-    draw.text((width - 260, height - 74), PAGE_HANDLE, font=F(30, False), fill=C["red"])
-
+        
+        # Draw Fact Text
+        fact_font = F(34, False)
+        wrapped_fact = textwrap.wrap(shorten(fact, 140), width=44)[:3]
+        
+        text_y = fact_y
+        for i, line in enumerate(wrapped_fact):
+            # Bold the first few words of the first line for editorial emphasis
+            if i == 0 and len(line.split()) > 2:
+                words = line.split()
+                bold_part = " ".join(words[:2])
+                normal_part = " " + " ".join(words[2:])
+                
+                # Draw bold part
+                draw.text((144, text_y), bold_part, font=F(34, True), fill=accent_color)
+                bp_w = draw.textbbox((0, 0), bold_part, font=F(34, True))[2]
+                # Draw normal part
+                draw.text((144 + bp_w, text_y), normal_part, font=fact_font, fill=C["offwhite"])
+            else:
+                draw.text((144, text_y), line, font=fact_font, fill=C["offwhite"])
+            text_y += 44
+            
+        fact_y += fact_spacing
+        
+    # 6. Footer
+    footer_y = 1200
+    draw.line([(60, footer_y), (width - 60, footer_y)], fill=(45, 48, 65), width=2)
+    
+    paste_logo(canvas, 60, footer_y + 20, size=60)
+    draw = ImageDraw.Draw(canvas)
+    draw.text((134, footer_y + 32), PAGE_HANDLE, font=F(32, True), fill=C["white"])
+    
+    swipe_text = "Swipe for visual breakdown →"
+    sw_w = draw.textbbox((0, 0), swipe_text, font=F(28, True))[2]
+    draw.text((width - 60 - sw_w, footer_y + 34), swipe_text, font=F(28, True), fill=accent_color)
+    
+    source_line = f"Source: {display_source(article['source'])}  |  {datetime.now().strftime('%d %b %Y')}"
+    draw.text((60, footer_y + 94), source_line.upper(), font=F(24, True), fill=(100, 105, 120))
+    
     canvas.save(path, "JPEG", quality=96)
     return path
 
@@ -380,49 +533,113 @@ def slide2_facts(article, path):
 def slide3_visual(article, path):
     width, height = 1080, 1350
     print("    Slide 3 - VISUAL...")
-    headline_text = slide_headline(article, max_chars=75)
-    summary_text = slide_summary(article, max_chars=150)
-    canvas = darken_background(get_photo(article, width, height, seed_offset=300), factor=0.32)
-    canvas = add_bottom_fade(canvas, 450)
+    headline_text = article.get("ai_title") or slide_headline(article, max_chars=75)
+    summary_text = article.get("ai_summary") or slide_summary(article, max_chars=150)
+    
+    # 1. Base Image - full bleed
+    photo = get_photo(article, width, height, seed_offset=300, fit=True)
+    
+    # 2. Cinematic Vignette Overlay (Dark at bottom and top)
+    overlay = Image.new('RGBA', photo.size, (0, 0, 0, 0))
+    draw_ov = ImageDraw.Draw(overlay)
+    
+    # Global dim
+    draw_ov.rectangle([0, 0, width, height], fill=(12, 13, 20, 90))
+    
+    # Top fade (for header)
+    for y in range(220):
+        alpha = int(180 * (1 - (y / 220)))
+        draw_ov.line([(0, y), (width, y)], fill=(10, 11, 16, alpha))
+        
+    # Bottom fade (for text and footer)
+    fade_start = 550
+    for y in range(fade_start, height):
+        ratio = (y - fade_start) / (height - fade_start)
+        alpha = int(240 * ratio)
+        draw_ov.line([(0, y), (width, y)], fill=(10, 11, 16, alpha))
+        
+    canvas = Image.alpha_composite(photo.convert('RGBA'), overlay).convert('RGB')
     draw = ImageDraw.Draw(canvas)
-
-    draw.rectangle([0, 0, width, 120], fill=(90, 5, 15))
-    paste_logo(canvas, 24, 14, size=92)
+    
+    # 3. Transparent Brand Header
+    draw_brand_header(canvas, width, transparent=True)
     draw = ImageDraw.Draw(canvas)
-    draw.text((128, 20), "NEWS", font=F(46, True), fill=C["white"])
-    draw.text((128, 68), "FLASH", font=F(46, True), fill=C["red"])
-
-    category = article["category"]
-    category_box = draw.textbbox((0, 0), category, font=F(34, True))
-    category_width = category_box[2] - category_box[0] + 32
-    draw.rectangle([width - category_width - 20, 28, width - 20, 92], fill=C["red"])
-    draw.text((width - category_width - 4, 38), category, font=F(34, True), fill=C["white"])
-
-    quote = shorten(" ".join(headline_text.split()[:10]), 70)
-    quote_y = 650
-    draw.rectangle([40, quote_y - 16, width - 40, quote_y], fill=C["red"])
-    quote_font = F(70, True)
-    for line in textwrap.wrap(f'"{quote}"', width=22)[:3]:
-        line_box = draw.textbbox((0, 0), line, font=quote_font)
-        line_x = (width - (line_box[2] - line_box[0])) // 2
-        shadow(draw, (line_x, quote_y), line, quote_font, C["white"], (0, 0, 0), 4)
-        quote_y += 86
-    draw.rectangle([40, quote_y + 6, width - 40, quote_y + 20], fill=C["red"])
-
-    source_text = f"Source: {display_source(article['source'])}"
-    source_box = draw.textbbox((0, 0), source_text, font=F(34, False))
-    source_x = (width - (source_box[2] - source_box[0])) // 2
-    draw.text((source_x, quote_y + 36), source_text, font=F(34, False), fill=C["offwhite"])
-
-    summary_y = quote_y + 100
-    for line in _summary_lines(summary_text, width=36, max_lines=3, max_chars=150):
-        draw.text((50, summary_y), line, font=F(36, False), fill=(210, 185, 185))
-        summary_y += 46
-
-    draw.rectangle([0, height - 90, width, height], fill=(14, 6, 9))
-    draw.text((36, height - 70), "Follow " + PAGE_HANDLE, font=F(32, True), fill=C["red"])
-    draw.text((width - 320, height - 70), "Tap save for updates", font=F(28, False), fill=(160, 130, 130))
-
+    
+    # Category / Accent
+    category_name = article.get("category", "WORLD").upper()
+    accent_color = get_category_color(category_name)
+    
+    # Category Tag pill in top right
+    tag_font = F(24, True)
+    tb = draw.textbbox((0, 0), category_name, font=tag_font)
+    tw = tb[2] - tb[0]
+    th = tb[3] - tb[1]
+    
+    pill_x = width - tw - 80
+    pill_y = 44
+    draw.rounded_rectangle([pill_x, pill_y, pill_x + tw + 32, pill_y + th + 16], radius=6, fill=accent_color)
+    draw.text((pill_x + 16, pill_y + 8), category_name, font=tag_font, fill=C["white"])
+    
+    # 4. Premium Glassmorphic Quote Card (y=620)
+    card_y = 660
+    card_x1 = 60
+    card_x2 = width - 60
+    
+    # Let's wrap quote first to calculate height dynamically
+    quote_text = article.get("ai_hook") or headline_text
+    if not quote_text.startswith('"'):
+        quote_text = f'"{quote_text}"'
+        
+    quote_font = F(56, True)
+    wrapped_quote = textwrap.wrap(quote_text, width=32)[:3]
+    
+    card_h = 40 + len(wrapped_quote) * 66 + 60 # padding + text + citation space
+    card_y2 = card_y + card_h
+    
+    # Draw rounded rect background
+    draw.rounded_rectangle([card_x1, card_y, card_x2, card_y2], radius=16, fill=(15, 17, 26, 190), outline=(45, 48, 65), width=2)
+    
+    # Draw thick accent color left border line
+    draw.rectangle([card_x1 + 4, card_y + 12, card_x1 + 10, card_y2 - 12], fill=accent_color)
+    
+    # Draw Quote Lines
+    qy = card_y + 24
+    for line in wrapped_quote:
+        draw.text((card_x1 + 34, qy), line, font=quote_font, fill=C["white"])
+        qy += 66
+        
+    # Draw Source Citation inside the card bottom right
+    source_text = f"— SOURCE: {display_source(article['source']).upper()}"
+    source_font = F(24, True)
+    sb = draw.textbbox((0, 0), source_text, font=source_font)
+    sw = sb[2] - sb[0]
+    draw.text((card_x2 - sw - 30, qy + 10), source_text, font=source_font, fill=accent_color)
+    
+    # 5. Summary Text below Quote Card
+    summary_y = card_y2 + 40
+    summary_font = F(34, False)
+    wrapped_summary = textwrap.wrap(summary_text, width=50)[:3]
+    
+    for line in wrapped_summary:
+        draw.text((61, summary_y + 1), line, font=summary_font, fill=(0, 0, 0))
+        draw.text((60, summary_y), line, font=summary_font, fill=C["offwhite"])
+        summary_y += 44
+        
+    # 6. Transparent Footer
+    footer_y = 1200
+    draw.line([(60, footer_y), (width - 60, footer_y)], fill=(45, 48, 65), width=2)
+    
+    paste_logo(canvas, 60, footer_y + 20, size=60)
+    draw = ImageDraw.Draw(canvas)
+    draw.text((134, footer_y + 32), PAGE_HANDLE, font=F(32, True), fill=C["white"])
+    
+    save_text = "Save this post for later"
+    sv_w = draw.textbbox((0, 0), save_text, font=F(28, True))[2]
+    draw.text((width - 60 - sv_w, footer_y + 34), save_text, font=F(28, True), fill=accent_color)
+    
+    source_line = f"NEWS FLASH 5  |  VERIFIED & FACTUAL UPDATES"
+    draw.text((60, footer_y + 94), source_line.upper(), font=F(24, True), fill=(100, 105, 120))
+    
     canvas.save(path, "JPEG", quality=96)
     return path
 
@@ -430,37 +647,96 @@ def slide3_visual(article, path):
 def slide4_cta(article, path):
     width, height = 1080, 1350
     print("    Slide 4 - CTA...")
-    canvas = _gradient(width, height)
+    
+    # Category Accent Color
+    category_name = article.get("category", "WORLD").upper()
+    accent_color = get_category_color(category_name)
+    
+    # 1. Premium background gradient with a subtle corner glow
+    canvas = Image.new("RGB", (width, height), C["dark_bg"])
     draw = ImageDraw.Draw(canvas)
-
-    grid_color = (100, 30, 40)
-    for x_coord in range(0, width, 60):
-        draw.line([(x_coord, 0), (x_coord, height)], fill=grid_color, width=1)
-    for y_coord in range(0, height, 60):
-        draw.line([(0, y_coord), (width, y_coord)], fill=grid_color, width=1)
-
-    paste_logo(canvas, width // 2 - 180, 160, size=360)
+    for y in range(height):
+        ratio = y / height
+        c_r = int(C["dark_bg"][0] + (accent_color[0] - C["dark_bg"][0]) * 0.12 * ratio)
+        c_g = int(C["dark_bg"][1] + (accent_color[1] - C["dark_bg"][1]) * 0.12 * ratio)
+        c_b = int(C["dark_bg"][2] + (accent_color[2] - C["dark_bg"][2]) * 0.12 * ratio)
+        draw.line([(0, y), (width, y)], fill=(c_r, c_g, c_b))
+        
     draw = ImageDraw.Draw(canvas)
-    center_x(draw, 550, PAGE_NAME.upper(), F(78, True), C["white"], width, shadow_fill=C["dark_bg"])
-    center_x(draw, 640, PAGE_HANDLE, F(54, True), C["red"], width)
-    draw.rectangle([160, 715, width - 160, 723], fill=C["red"])
-
-    cta_y = 745
-    for text, color in [
-        ("Follow", C["white"]),
-        (PAGE_HANDLE, C["red"]),
-        ("for hourly India + world news", C["offwhite"]),
-        ("and fast breaking updates", C["offwhite"]),
-    ]:
-        center_x(draw, cta_y, text, F(50, True), color, width)
-        cta_y += 70
-
-    draw.rectangle([160, 1030, width - 160, 1038], fill=C["dark_red"])
-    center_x(draw, 1056, "Turn on notifications", F(44, True), C["white"], width)
-    center_x(draw, 1114, "Never miss a breaking story", F(34, False), (180, 150, 150), width)
-    center_x(draw, 1200, "Instagram | Telegram | WhatsApp | YouTube", F(28, False), (160, 130, 130), width)
-    center_x(draw, 1244, "news.flash5 on all platforms", F(28, False), C["red"], width)
-
+    
+    # 2. Logo with glowing ring (centered at y=180)
+    logo_size = 280
+    logo_x = (width - logo_size) // 2
+    logo_y = 180
+    
+    # Draw glowing circular ring border
+    ring_padding = 20
+    draw.ellipse(
+        [
+            logo_x - ring_padding, 
+            logo_y - ring_padding, 
+            logo_x + logo_size + ring_padding, 
+            logo_y + logo_size + ring_padding
+        ], 
+        outline=accent_color, 
+        width=5
+    )
+    
+    paste_logo(canvas, logo_x, logo_y, size=logo_size)
+    draw = ImageDraw.Draw(canvas)
+    
+    # 3. Brand Header Title
+    title_y = 520
+    brand_font = F(72, True)
+    center_x(draw, title_y, "NEWS FLASH 5", brand_font, C["white"], width)
+    
+    handle_font = F(38, True)
+    center_x(draw, title_y + 80, PAGE_HANDLE, handle_font, accent_color, width)
+    
+    # 4. Premium CTA Card
+    card_x1 = 100
+    card_y1 = 690
+    card_x2 = width - 100
+    card_y2 = 1140
+    
+    draw.rounded_rectangle([card_x1, card_y1, card_x2, card_y2], radius=20, fill=(20, 22, 32, 200), outline=(45, 48, 65), width=2)
+    
+    # CTA Card Content
+    card_draw_y = card_y1 + 40
+    center_x(draw, card_draw_y, "YOUR DAILY PORTAL FOR INSTANT GLOBAL NEWS", F(28, True), (140, 145, 160), width)
+    
+    # Follow instruction text
+    card_draw_y += 64
+    center_x(draw, card_draw_y, "Follow for hourly updates, visual breakdowns", F(34, False), C["offwhite"], width)
+    center_x(draw, card_draw_y + 42, "and verified breaking news alerts.", F(34, False), C["offwhite"], width)
+    
+    # Turn on notifications button
+    btn_w = 560
+    btn_h = 76
+    btn_x = (width - btn_w) // 2
+    btn_y = card_draw_y + 120
+    
+    draw.rounded_rectangle([btn_x, btn_y, btn_x + btn_w, btn_y + btn_h], radius=38, fill=accent_color)
+    
+    btn_text = "TURN ON NOTIFICATIONS"
+    btn_font = F(30, True)
+    bt_b = draw.textbbox((0, 0), btn_text, font=btn_font)
+    bt_w = bt_b[2] - bt_b[0]
+    bt_h = bt_b[3] - bt_b[1]
+    
+    draw.text((btn_x + (btn_w - bt_w) // 2, btn_y + (btn_h - bt_h) // 2 - 2), btn_text, font=btn_font, fill=C["white"])
+    
+    # Spacing and multi-platform links
+    platform_y = btn_y + 120
+    center_x(draw, platform_y, "INSTAGRAM  |  TELEGRAM  |  WHATSAPP  |  YOUTUBE", F(26, True), (120, 125, 140), width)
+    
+    # 5. Footer Copyright
+    footer_y = 1220
+    draw.line([(100, footer_y), (width - 100, footer_y)], fill=(45, 48, 65), width=2)
+    
+    copyright_text = "© NEWS FLASH 5. ALL RIGHTS RESERVED."
+    center_x(draw, footer_y + 36, copyright_text, F(24, True), (90, 95, 110), width)
+    
     canvas.save(path, "JPEG", quality=96)
     return path
 
@@ -481,17 +757,15 @@ def digest_cover_slide(articles, path):
         # Create a parabolic alpha curve: dark at top, lighter in middle, very dark at bottom.
         ny = (y / (height / 2)) - 1  # -1 at top, 0 at middle, 1 at bottom
         
-        # Base darkness 150. Edges push towards 255.
-        base_alpha = 150
+        # Base darkness 140. Edges push towards 255.
+        base_alpha = 140
         # Make the bottom edge darker than the top edge
-        edge_boost = 105 * (ny ** 2) if ny < 0 else 105 * (ny ** 1.5)
+        edge_boost = 115 * (ny ** 2) if ny < 0 else 115 * (ny ** 1.5)
         
         alpha = int(min(255, base_alpha + edge_boost))
         
-        # Add a slight red tint towards the bottom
-        red_tint = int(10 + 15 * (y / height))
-        
-        draw_ov.line([(0, y), (width, y)], fill=(red_tint, 4, 8, alpha))
+        # Premium dark blue/purple tint towards the bottom
+        draw_ov.line([(0, y), (width, y)], fill=(12, 13, 22, alpha))
         
     canvas = Image.alpha_composite(base_img.convert('RGBA'), overlay).convert('RGB')
     draw = ImageDraw.Draw(canvas)
@@ -500,11 +774,13 @@ def digest_cover_slide(articles, path):
     draw_brand_header(canvas, width, label="NEWS", transparent=True)
     draw = ImageDraw.Draw(canvas)
     
+    accent_color = (255, 195, 0) # Gold Accent
+    
     # Top Right Badge: "BREAKING NEWS | • LIVE"
     badge_x = width - 260
     badge_y = 50
     # Red Top Half
-    draw.rectangle([badge_x, badge_y, badge_x + 220, badge_y + 45], fill=(220, 15, 20))
+    draw.rectangle([badge_x, badge_y, badge_x + 220, badge_y + 45], fill=C["red"])
     t1 = "BREAKING"
     w1 = draw.textbbox((0,0), t1, font=F(28, True))[2]
     draw.text((badge_x + (220 - w1)//2, badge_y + 5), t1, font=F(28, True), fill=C["white"])
@@ -514,20 +790,15 @@ def digest_cover_slide(articles, path):
     w2 = draw.textbbox((0,0), t2, font=F(36, True))[2]
     draw.text((badge_x + (220 - w2)//2, badge_y + 45), t2, font=F(36, True), fill=(0, 0, 0))
     # Live Pill
-    draw.rounded_rectangle([badge_x + 130, badge_y + 100, badge_x + 220, badge_y + 135], radius=15, fill=(200, 15, 20))
+    draw.rounded_rectangle([badge_x + 130, badge_y + 100, badge_x + 220, badge_y + 135], radius=15, fill=C["red"])
     draw.text((badge_x + 145, badge_y + 102), "• LIVE", font=F(22, True), fill=C["white"])
 
-    # Grab the viral hook or headline from the #1 story
-    hook_text = top_article.get("ai_hook") or top_article.get("ai_title") or "THE WORLD RIGHT NOW"
-    hook_text = hook_text.upper()
-    
     # Font Awesome Setup
     fa_font = ImageFont.truetype("assets/fa-solid-900.ttf", 45)
     
     # Draw massive centered text: "5 BIG STORIES IN 60 SECONDS"
     title_y = 200
     
-    # Calculate widths to center perfectly and prevent overlaps
     font_5 = F(480, True, impact=True)
     w5 = draw.textbbox((0,0), "5", font=font_5)[2]
     
@@ -537,7 +808,6 @@ def digest_cover_slide(articles, path):
     font_stories = F(140, True, impact=True)
     w_stories = draw.textbbox((0,0), "STORIES", font=font_stories)[2]
     
-    # Total block width = w5 + gap (20) + max(w_big, w_stories) + motion_lines (160)
     gap = 20
     motion_w = 160
     block_width = w5 + gap + max(w_big, w_stories) + motion_w
@@ -551,16 +821,16 @@ def digest_cover_slide(articles, path):
     draw.text((right_x, title_y + 40), "BIG", font=font_big, fill=C["white"])
     
     # Draw "STORIES"
-    draw.text((right_x, title_y + 170), "STORIES", font=font_stories, fill=(255, 195, 0)) # Yellow
+    draw.text((right_x, title_y + 170), "STORIES", font=font_stories, fill=accent_color)
     
     # Motion lines extending from STORIES
     line_x = right_x + w_stories + 40
     line_y_base = title_y + 170
-    draw.line([(line_x, line_y_base + 60), (line_x + 160, line_y_base + 60)], fill=(220, 15, 20), width=10)
-    draw.line([(line_x, line_y_base + 90), (line_x + 200, line_y_base + 90)], fill=(220, 15, 20), width=10)
-    draw.line([(line_x, line_y_base + 120), (line_x + 180, line_y_base + 120)], fill=(220, 15, 20), width=10)
+    draw.line([(line_x, line_y_base + 60), (line_x + 160, line_y_base + 60)], fill=C["red"], width=10)
+    draw.line([(line_x, line_y_base + 90), (line_x + 200, line_y_base + 90)], fill=C["red"], width=10)
+    draw.line([(line_x, line_y_base + 120), (line_x + 180, line_y_base + 120)], fill=C["red"], width=10)
     
-    # "IN 60 SECONDS" (Red slanted block) - moved down to prevent 5 overlap
+    # "IN 60 SECONDS" (Red slanted block)
     block_y = title_y + 400
     block_w = 600
     block_h = 90
@@ -573,12 +843,12 @@ def digest_cover_slide(articles, path):
         (block_x + block_w, block_y), 
         (block_x + block_w - slant, block_y + block_h), 
         (block_x, block_y + block_h)
-    ], fill=(220, 15, 20))
+    ], fill=C["red"])
     
     font_60 = F(70, True, impact=True)
     # Text inside block
     draw.text((block_x + 60, block_y + 10), "IN", font=font_60, fill=C["white"])
-    draw.text((block_x + 135, block_y + 10), "60", font=font_60, fill=(255, 195, 0))
+    draw.text((block_x + 135, block_y + 10), "60", font=font_60, fill=accent_color)
     draw.text((block_x + 235, block_y + 10), "SECONDS", font=font_60, fill=C["white"])
     
     # Divider: FAST . FACTUAL . ESSENTIAL
@@ -594,14 +864,13 @@ def digest_cover_slide(articles, path):
     total_div_w = w_fast + gap_div + w_dot + gap_div + w_factual + gap_div + w_dot + gap_div + w_essential
     dx = (width - total_div_w) // 2
     
-    # Draw text piece by piece
     draw.text((dx, div_y), "FAST", font=font_div, fill=C["white"])
     dx += w_fast + gap_div
-    draw.text((dx, div_y - 6), ".", font=font_div, fill=(220, 15, 20))
+    draw.text((dx, div_y - 6), ".", font=font_div, fill=C["red"])
     dx += w_dot + gap_div
     draw.text((dx, div_y), "FACTUAL", font=font_div, fill=C["white"])
     dx += w_factual + gap_div
-    draw.text((dx, div_y - 6), ".", font=font_div, fill=(220, 15, 20))
+    draw.text((dx, div_y - 6), ".", font=font_div, fill=C["red"])
     dx += w_dot + gap_div
     draw.text((dx, div_y), "ESSENTIAL", font=font_div, fill=C["white"])
     
@@ -615,25 +884,20 @@ def digest_cover_slide(articles, path):
     spacing = 180
     start_x = width//2 - int(2 * spacing)
     labels = ["GLOBAL\nUPDATES", "POLITICS &\nGOVERNANCE", "ECONOMY\nIN FOCUS", "PEOPLE &\nSOCIETY", "MORE STORIES\nINSIDE"]
-    # FontAwesome Unicodes: Globe, Bank, Chart, Users, Bullhorn
     icons = ["\uf0ac", "\uf19c", "\uf201", "\uf0c0", "\uf0a1"]
     
     for i in range(5):
         cx = start_x + i * spacing
-        # Draw red circle with white outline
-        draw.ellipse([cx - circle_r, circle_y, cx + circle_r, circle_y + circle_r*2], outline=(220, 15, 20), width=6)
+        draw.ellipse([cx - circle_r, circle_y, cx + circle_r, circle_y + circle_r*2], outline=C["red"], width=6)
         draw.ellipse([cx - circle_r + 4, circle_y + 4, cx + circle_r - 4, circle_y + circle_r*2 - 4], outline=C["white"], width=2)
         
-        # Icon
         icon_str = icons[i]
         icon_w = draw.textbbox((0,0), icon_str, font=fa_font)[2]
         draw.text((cx - icon_w//2, circle_y + 20), icon_str, font=fa_font, fill=C["white"])
         
-        # Draw vertical separator line after circle (except last)
         if i < 4:
             draw.line([(cx + spacing//2, circle_y + 10), (cx + spacing//2, circle_y + 90)], fill=(100, 100, 100, 180), width=2)
             
-        # Label
         lines = labels[i].split('\n')
         for idx, lbl_line in enumerate(lines):
             lw = draw.textbbox((0,0), lbl_line, font=F(18, True))[2]
@@ -645,56 +909,52 @@ def digest_cover_slide(articles, path):
     hook_h = 100
     hook_x = (width - hook_w) // 2
     
-    # Draw black box with red outline
-    draw.rounded_rectangle([hook_x, hook_y, hook_x + hook_w, hook_y + hook_h], radius=15, fill=(10, 5, 8), outline=(220, 15, 20), width=4)
+    draw.rounded_rectangle([hook_x, hook_y, hook_x + hook_w, hook_y + hook_h], radius=15, fill=(10, 11, 16, 200), outline=accent_color, width=4)
     
-    # Clock icon
     fa_clock = "\uf2f2"
     fa_clock_font = ImageFont.truetype("assets/fa-solid-900.ttf", 60)
-    draw.text((hook_x + 40, hook_y + 20), fa_clock, font=fa_clock_font, fill=(220, 15, 20))
+    draw.text((hook_x + 40, hook_y + 20), fa_clock, font=fa_clock_font, fill=accent_color)
     
-    # Text inside hook box
     hook_text_1 = "WAIT TILL YOU SEE"
     hook_text_2 = "THE LAST ONE..."
     font_h1 = F(32, True)
     font_h2 = F(36, True, impact=True)
     draw.text((hook_x + 130, hook_y + 15), hook_text_1, font=font_h1, fill=C["white"])
-    draw.text((hook_x + 130, hook_y + 50), hook_text_2, font=font_h2, fill=(255, 195, 0))
+    draw.text((hook_x + 130, hook_y + 50), hook_text_2, font=font_h2, fill=accent_color)
     
-    # Arrows inside hook box
     fa_angles = "\uf101"
-    draw.text((hook_x + 600, hook_y + 25), fa_angles, font=fa_clock_font, fill=(220, 15, 20))
+    draw.text((hook_x + 600, hook_y + 25), fa_angles, font=fa_clock_font, fill=accent_color)
 
     # Footer Date
     footer_y = 1170
     date_str = datetime.now().strftime('%d %b %Y   |   %H:%M')
-    # Calendar icon
     fa_cal = "\uf133"
     cal_w = draw.textbbox((0,0), fa_cal, font=F(24, True))[2]
-    # Center everything
     footer_text = f"UPDATED: {date_str.upper()}"
     ft_w = draw.textbbox((0,0), footer_text, font=F(24, True))[2]
     total_w = cal_w + 10 + ft_w
     fx = (width - total_w) // 2
     
     fa_small = ImageFont.truetype("assets/fa-solid-900.ttf", 24)
-    draw.text((fx, footer_y), fa_cal, font=fa_small, fill=(220, 15, 20))
+    draw.text((fx, footer_y), fa_cal, font=fa_small, fill=C["red"])
     draw.text((fx + cal_w + 10, footer_y), footer_text, font=F(24, True), fill=(200, 200, 200))
     
-    # Black Swipe Button (Bottom CTA)
+    # Premium Swipe Button (Bottom CTA)
     btn_w, btn_h = 600, 75
     btn_x, btn_y = (width - btn_w) // 2, 1220
-    draw.rounded_rectangle([btn_x, btn_y, btn_x + btn_w, btn_y + btn_h], radius=40, fill=(10, 5, 8), outline=(220, 15, 20), width=4)
+    draw.rounded_rectangle([btn_x, btn_y, btn_x + btn_w, btn_y + btn_h], radius=40, fill=accent_color)
     
     btn_text = "WATCH FULL BREAKDOWN"
-    text_w = draw.textbbox((0,0), btn_text, font=F(32, True))[2]
-    # Place text and arrows perfectly
-    btn_content_w = text_w + 20 + draw.textbbox((0,0), fa_angles, font=F(32, True))[2]
+    btn_font = F(32, True)
+    text_w = draw.textbbox((0,0), btn_text, font=btn_font)[2]
+    btn_content_w = text_w + 20 + draw.textbbox((0,0), fa_angles, font=btn_font)[2]
     bx = btn_x + (btn_w - btn_content_w) // 2
-    draw.text((bx, btn_y + 20), btn_text, font=F(32, True), fill=C["white"])
+    
+    # Use dark background text on gold button for premium contrast!
+    draw.text((bx, btn_y + 20), btn_text, font=btn_font, fill=C["dark_bg"])
     
     fa_mid = ImageFont.truetype("assets/fa-solid-900.ttf", 32)
-    draw.text((bx + text_w + 20, btn_y + 20), fa_angles, font=fa_mid, fill=(220, 15, 20))
+    draw.text((bx + text_w + 20, btn_y + 20), fa_angles, font=fa_mid, fill=C["dark_bg"])
 
     canvas.save(path, "JPEG", quality=96)
     return path
@@ -715,103 +975,110 @@ def digest_story_slide(article, path, index, total):
     draw_ov = ImageDraw.Draw(overlay)
     
     # Overall subtle dimming to ensure text pops
-    draw_ov.rectangle([0, 0, width, height], fill=(12, 6, 10, 80))
+    draw_ov.rectangle([0, 0, width, height], fill=(12, 13, 20, 80))
     
     # Heavy left gradient for the massive headline and summary box
     fade_w = int(width * 0.75)
     for x in range(fade_w):
         alpha = int(220 * (1 - (x / fade_w)))
-        draw_ov.line([(x, 0), (x, height)], fill=(12, 6, 10, alpha))
+        draw_ov.line([(x, 0), (x, height)], fill=(10, 11, 16, alpha))
         
     # Heavy bottom gradient for the page counter
     fade_h_start = int(height * 0.75)
     for y in range(fade_h_start, height):
         alpha = int(240 * ((y - fade_h_start) / (height - fade_h_start)))
-        draw_ov.line([(0, y), (width, y)], fill=(12, 6, 10, alpha))
+        draw_ov.line([(0, y), (width, y)], fill=(10, 11, 16, alpha))
+        
     # Composite vignette overlay onto base image
     canvas = Image.alpha_composite(base_img.convert('RGBA'), overlay).convert('RGB')
-
     draw = ImageDraw.Draw(canvas)
-
+    
     # Transparent Header
     draw_brand_header(canvas, width, label=label_text, transparent=True)
     draw = ImageDraw.Draw(canvas)
-
+    
+    # Accent color based on category
+    category_name = article.get("category", "WORLD").upper()
+    accent_color = get_category_color(category_name)
+    
     # Date & Category Pill
     pill_y = 160
     date_str = article.get("ai_date") or datetime.now().strftime('%d %b %Y')
     draw.text((60, pill_y + 5), date_str.upper(), font=F(28, False), fill=C["offwhite"])
     draw.line([(240, pill_y), (240, pill_y + 40)], fill=(100, 100, 100), width=2)
     
-    category = article["category"].upper()
-    cat_w = draw.textbbox((0, 0), category, font=F(28, True))[2]
-    draw.rounded_rectangle([260, pill_y, 260 + cat_w + 30, pill_y + 40], radius=8, fill=(160, 15, 20))
-    draw.text((275, pill_y + 5), category, font=F(28, True), fill=C["white"])
-
-    # Huge Left-Aligned Headline
-    title_y = 240
-    title_font = F(84, True)
-    wrapped_title = textwrap.wrap(headline_text.upper(), width=16)[:4]
-
-    # Draw a smooth transparent dark panel EXACTLY behind the headline lines only
-    # This avoids any hard-edge seam — it's drawn per-line as a rounded rect with low alpha
+    cat_w = draw.textbbox((0, 0), category_name, font=F(28, True))[2]
+    draw.rounded_rectangle([260, pill_y, 260 + cat_w + 30, pill_y + 40], radius=8, fill=accent_color)
+    draw.text((275, pill_y + 5), category_name, font=F(28, True), fill=C["white"])
+    
+    # Huge Left-Aligned Headline (Mixed case is much more premium!)
+    title_y = 230
+    title_font = F(72, True)
+    title_font_sm = F(54, True)
+    
+    # Split headline if it has an accent divider
+    full_headline = headline_text
+    
+    # Find separator
+    sep = None
+    for s in [" — ", " - ", " : ", ": "]:
+        if s in full_headline:
+            sep = s
+            break
+            
+    if sep:
+        part1, part2 = full_headline.split(sep, 1)
+        part1 = part1.strip()
+        part2 = part2.strip()
+        
+        # Wrapped title blocks
+        wrapped_p1 = textwrap.wrap(part1, width=22)[:2]
+        wrapped_p2 = textwrap.wrap(part2, width=28)[:2]
+        
+        headline_lines = [(line, title_font, C["white"]) for line in wrapped_p1]
+        headline_lines.append(("-divider-", None, None))
+        headline_lines.extend([(line, title_font_sm, accent_color) for line in wrapped_p2])
+    else:
+        wrapped_title = textwrap.wrap(full_headline, width=22)[:3]
+        headline_lines = [(line, title_font, C["white"] if idx == 0 else accent_color if idx == 1 else C["offwhite"]) for idx, line in enumerate(wrapped_title)]
+        
+    # Draw frosted glass behind headline lines
     panel_layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
     panel_draw = ImageDraw.Draw(panel_layer)
-    for i, line in enumerate(wrapped_title):
-        lw = draw.textbbox((0, 0), line, font=title_font)[2]
-        lh = draw.textbbox((0, 0), line, font=title_font)[3]
-        px1 = 40
-        py1 = title_y - 8
-        px2 = px1 + lw + 30
-        py2 = title_y + lh + 8
-        panel_draw.rounded_rectangle([px1, py1, px2, py2], radius=8, fill=(8, 4, 6, 100))
-        title_y += 90
+    _ty = title_y
+    for line, font, color in headline_lines:
+        if line == "-divider-":
+            _ty += 16
+            continue
+        lw = draw.textbbox((0, 0), line, font=font)[2]
+        lh = draw.textbbox((0, 0), line, font=font)[3]
+        panel_draw.rounded_rectangle([50, _ty - 4, 50 + lw + 24, _ty + lh + 6], radius=6, fill=(10, 11, 16, 140))
+        _ty += lh + 14
+        
     canvas = Image.alpha_composite(canvas.convert("RGBA"), panel_layer).convert("RGB")
     draw = ImageDraw.Draw(canvas)
-
-    # Now draw headline text on top
-    # AI generates 2-part headlines: "WHAT HAPPENED — Why it matters"
-    title_y = 240
-    title_font = F(78, True)       # Part 1: large, bold
-    title_font_sm = F(58, True)    # Part 2: smaller, informative
-
-    full_headline = headline_text.upper()
-
-    if " — " in full_headline or " - " in full_headline:
-        sep = " — " if " — " in full_headline else " - "
-        part1, part2 = full_headline.split(sep, 1)
-
-        # Part 1: large white — the event/action
-        for line in textwrap.wrap(part1, width=18)[:2]:
-            draw.text((63, title_y + 3), line, font=title_font, fill=(0, 0, 0))
-            draw.text((60, title_y), line, font=title_font, fill=C["white"])
-            title_y += 88
-
-        # Thin red accent divider
-        title_y += 6
-        draw.line([(60, title_y), (420, title_y)], fill=C["red"], width=4)
-        title_y += 16
-
-        # Part 2: smaller yellow — the impact/context
-        for line in textwrap.wrap(part2, width=24)[:2]:
-            draw.text((63, title_y + 2), line, font=title_font_sm, fill=(0, 0, 0))
-            draw.text((60, title_y), line, font=title_font_sm, fill=(255, 195, 0))
-            title_y += 68
-    else:
-        # Fallback: line 1 white, line 2 yellow, line 3 red
-        for i, line in enumerate(textwrap.wrap(full_headline, width=18)[:4]):
-            color = C["white"] if i == 0 else (255, 195, 0) if i == 1 else C["red"]
-            draw.text((63, title_y + 3), line, font=title_font, fill=(0, 0, 0))
-            draw.text((60, title_y), line, font=title_font, fill=color)
-            title_y += 88
-
-    # Summary Intro Paragraph (Enlarged)
-    title_bottom = title_y + 20
-    summary_y = title_bottom
+    
+    # Draw actual text on top
+    _ty = title_y
+    for line, font, color in headline_lines:
+        if line == "-divider-":
+            draw.line([(60, _ty + 6), (380, _ty + 6)], fill=accent_color, width=4)
+            _ty += 16
+            continue
+        # Shadow
+        draw.text((62, _ty + 2), line, font=font, fill=(0, 0, 0))
+        draw.text((60, _ty), line, font=font, fill=color)
+        _ty += draw.textbbox((0, 0), line, font=font)[3] + 14
+        
+    # Draw vertical accent border along the headline block
+    draw.rectangle([44, title_y, 48, _ty - 12], fill=accent_color)
+    
+    # 7. Summary Intro Paragraph
+    summary_y = _ty + 16
     
     if article.get("ai_rewritten"):
         intro_text = summary_text
-        bullets = article.get("ai_highlights", [])[:4]
+        bullets = article.get("ai_highlights", [])[:3]
     else:
         sentences = [s.strip() for s in re.split(r'[.!?]', summary_text) if len(s.strip()) > 15]
         if len(sentences) > 1:
@@ -823,69 +1090,76 @@ def digest_story_slide(article, path, index, total):
                 intro_text = clauses[0] + ","
                 bullets = clauses[1:4]
             else:
-                intro_text = "Latest development:"
+                intro_text = "Latest developments on this story:"
                 bullets = [summary_text]
-            
-    # Wrap up to 6 lines for the 40-60 word AI summary
-    summary_lines = textwrap.wrap(intro_text, width=40)[:6]
-
-    # Draw per-line frosted glass panel under summary (same style as headline)
+                
+    summary_lines = textwrap.wrap(intro_text, width=44)[:4]
+    
+    # Frosted glass panel for summary lines
     summary_panel_layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
     summary_panel_draw = ImageDraw.Draw(summary_panel_layer)
     _sy = summary_y
     for line in summary_lines:
-        lw = draw.textbbox((0, 0), line, font=F(38, False))[2]
-        lh = draw.textbbox((0, 0), line, font=F(38, False))[3]
-        summary_panel_draw.rounded_rectangle(
-            [40, _sy - 4, 40 + lw + 25, _sy + lh + 4],
-            radius=6,
-            fill=(8, 4, 6, 110)
-        )
-        _sy += 50
+        lw = draw.textbbox((0, 0), line, font=F(36, False))[2]
+        lh = draw.textbbox((0, 0), line, font=F(36, False))[3]
+        summary_panel_draw.rounded_rectangle([50, _sy - 4, 50 + lw + 24, _sy + lh + 4], radius=6, fill=(10, 11, 16, 130))
+        _sy += lh + 12
     canvas = Image.alpha_composite(canvas.convert("RGBA"), summary_panel_layer).convert("RGB")
     draw = ImageDraw.Draw(canvas)
-
-    # Draw summary text on top
+    
+    # Draw summary text
+    _sy = summary_y
     for line in summary_lines:
-        draw.text((61, summary_y + 2), line, font=F(38, False), fill=(0, 0, 0))  # shadow
-        draw.text((60, summary_y), line, font=F(38, False), fill=(220, 220, 220))
-        summary_y += 50
-
-    # Key Highlights Box (Enlarged and dynamic)
-    summary_y += 40
-    box_w = 780
+        draw.text((61, _sy + 1), line, font=F(36, False), fill=(0, 0, 0))
+        draw.text((60, _sy), line, font=F(36, False), fill=C["offwhite"])
+        _sy += draw.textbbox((0, 0), line, font=F(36, False))[3] + 12
         
-    # Precisely calculate box height based on wrapping
-    box_h = 80
+    # 8. Key Highlights Box (Premium and dynamic)
+    summary_y = _sy + 30
+    box_w = 780
+    
     wrapped_bullets_list = []
+    box_h = 80
     for bullet in bullets:
-        b_text = shorten(bullet.capitalize(), 80)
+        b_text = shorten(bullet, 100)
         wrapped_b = textwrap.wrap(b_text, width=42)
         wrapped_bullets_list.append(wrapped_b)
-        box_h += len(wrapped_b) * 45
-    box_h += (len(bullets) - 1) * 30 + 20 # Add padding for separators and bottom
-
-    draw.rounded_rectangle([60, summary_y, 60 + box_w, summary_y + box_h], radius=20, fill=(15, 8, 10, 200), outline=(80, 20, 25), width=3)
-    draw.rounded_rectangle([60, summary_y, 60 + 320, summary_y + 55], radius=16, fill=(160, 15, 20))
-    draw.text((80, summary_y + 12), "KEY HIGHLIGHTS", font=F(30, True), fill=C["white"])
+        box_h += len(wrapped_b) * 42
+    box_h += (len(bullets) - 1) * 20 + 20
     
-    bullet_y = summary_y + 80
+    # Outer highlights box container
+    draw.rounded_rectangle([60, summary_y, 60 + box_w, summary_y + box_h], radius=16, fill=(15, 17, 26, 190), outline=(45, 48, 65), width=2)
+    
+    # Highlights label tag pill
+    draw.rounded_rectangle([60, summary_y, 60 + 280, summary_y + 50], radius=12, fill=accent_color)
+    draw.text((80, summary_y + 10), "KEY HIGHLIGHTS", font=F(26, True), fill=C["white"])
+    
+    bullet_y = summary_y + 76
     for idx, wrapped_b in enumerate(wrapped_bullets_list):
-        draw.ellipse([85, bullet_y + 15, 97, bullet_y + 27], fill=C["red"])
+        # Bullet dot in accent color
+        draw.ellipse([85, bullet_y + 12, 97, bullet_y + 24], fill=accent_color)
         for line in wrapped_b:
-            draw.text((125, bullet_y), line, font=F(34, False), fill=C["offwhite"])
-            bullet_y += 45
+            draw.text((120, bullet_y), line, font=F(32, False), fill=C["offwhite"])
+            bullet_y += 42
         if idx < len(bullets) - 1:
-            draw.line([(80, bullet_y + 10), (60 + box_w - 30, bullet_y + 10)], fill=(60, 40, 45), width=2)
-        bullet_y += 30
-
-    # Bottom Footer
-    draw.text((60, 1220), f"Source: {display_source(article['source'])}", font=F(32, True), fill=(180, 180, 180))
+            draw.line([(80, bullet_y + 8), (60 + box_w - 30, bullet_y + 8)], fill=(45, 48, 65), width=2)
+        bullet_y += 20
+        
+    # 9. Clean transparent footer matching other slides
+    footer_y = 1200
+    draw.line([(60, footer_y), (width - 60, footer_y)], fill=(45, 48, 65), width=2)
     
-    draw.rectangle([0, 1270, width, height], fill=(120, 10, 15))
-    draw.text((60, 1295), "STAY INFORMED. STAY AHEAD.", font=F(28, True), fill=C["white"])
-    draw.text((width - 400, 1295), "Swipe for next update ->" if index < total else "End of Hourly Digest", font=F(28, True), fill=C["white"])
-
+    paste_logo(canvas, 60, footer_y + 20, size=60)
+    draw = ImageDraw.Draw(canvas)
+    draw.text((134, footer_y + 32), PAGE_HANDLE, font=F(32, True), fill=C["white"])
+    
+    swipe_text = "Swipe for next update →" if index < total else "End of Hourly Digest"
+    sw_w = draw.textbbox((0, 0), swipe_text, font=F(28, True))[2]
+    draw.text((width - 60 - sw_w, footer_y + 34), swipe_text, font=F(28, True), fill=accent_color)
+    
+    source_line = f"Source: {display_source(article['source'])}  |  Slide {index} of {total}"
+    draw.text((60, footer_y + 94), source_line.upper(), font=F(24, True), fill=(100, 105, 120))
+    
     canvas.save(path, "JPEG", quality=96)
     return path
 
