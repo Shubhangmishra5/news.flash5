@@ -1,0 +1,8 @@
+.env
+.venv/
+__pycache__/
+posted_state.json
+output_posts/
+client_secrets.json
+token.json
+bot.log
