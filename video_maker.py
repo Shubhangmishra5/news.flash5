@@ -148,7 +148,7 @@ def overlay_subtitles(video_clip, srt_content):
 
         return np.array(img)
 
-    return video_clip.fl(lambda gf, t: add_subtitles_to_frame(gf(t), t))
+    return video_clip.transform(lambda gf, t: add_subtitles_to_frame(gf(t), t))
 
 
 def _generate_mock_srt(text, audio_path):
