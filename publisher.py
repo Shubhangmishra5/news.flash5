@@ -179,7 +179,7 @@ def post_reel(video_path, caption):
         # 2. Wait for Processing
         print("    Waiting for Instagram to process the video...")
         is_finished = False
-        for i in range(30): # Wait up to 150 seconds (30 * 5s)
+        for i in range(60): # Wait up to 300 seconds (60 * 5s)
             status_res = requests.get(
                 f"{GRAPH}/{container_id}?fields=status_code,status,error_description&access_token={IG_TOKEN}",
                 timeout=REQUEST_TIMEOUT
@@ -197,7 +197,7 @@ def post_reel(video_path, caption):
             time.sleep(5)
             
         if not is_finished:
-            raise Exception("Instagram video processing timed out (took longer than 150 seconds).")
+            raise Exception("Instagram video processing timed out (took longer than 300 seconds).")
             
         # 3. Publish
         requests.post(
