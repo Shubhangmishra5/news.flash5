@@ -151,22 +151,78 @@ def overlay_subtitles(video_clip, srt_content):
     return video_clip.fl(lambda gf, t: add_subtitles_to_frame(gf(t), t))
 
 
+def _generate_mock_srt(text, audio_path):
+    """Generate simple word-timed SRT subtitles based on audio duration for fallback TTS."""
+    try:
+        from moviepy import AudioFileClip
+        audio = AudioFileClip(audio_path)
+        duration = audio.duration
+        audio.close() # Close to release file descriptor
+    except Exception:
+        duration = 5.0 # Fallback default
+        
+    words = text.split()
+    if not words:
+        return ""
+        
+    total_words = len(words)
+    time_per_word = duration / total_words
+    
+    # Group words into chunks of 4 words for comfortable reading
+    chunk_size = 4
+    chunks = [words[i:i + chunk_size] for i in range(0, len(words), chunk_size)]
+    
+    lines = []
+    start_time = 0.0
+    for idx, chunk in enumerate(chunks, start=1):
+        chunk_text = " ".join(chunk)
+        chunk_duration = len(chunk) * time_per_word
+        end_time = min(duration, start_time + chunk_duration)
+        
+        # Format SRT time: HH:MM:SS,mmm
+        def fmt(t):
+            h = int(t // 3600)
+            m = int((t % 3600) // 60)
+            s = int(t % 60)
+            ms = int((t % 1) * 1000)
+            return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+            
+        lines.append(f"{idx}\n{fmt(start_time)} --> {fmt(end_time)}\n{chunk_text}\n")
+        start_time = end_time
+        
+    return "\n".join(lines)
+
+
 async def generate_voiceover(text, output_audio_path):
     """Generate professional AI voiceover and return the raw SRT subtitle content."""
     print("    Generating AI Voiceover & Subtitles...")
-    voice = "en-US-AndrewMultilingualNeural"
-    communicate = edge_tts.Communicate(text, voice, rate="+5%")
-    submaker = edge_tts.SubMaker()
-    
-    with open(output_audio_path, "wb") as audio_file:
-        async for chunk in communicate.stream():
-            if chunk["type"] == "audio":
-                audio_file.write(chunk["data"])
-            elif chunk["type"] == "WordBoundary":
-                submaker.feed(chunk)
-                
-    srt_content = submaker.get_srt()
-    return output_audio_path, srt_content
+    try:
+        voice = "en-US-AndrewMultilingualNeural"
+        communicate = edge_tts.Communicate(text, voice, rate="+5%")
+        submaker = edge_tts.SubMaker()
+        
+        with open(output_audio_path, "wb") as audio_file:
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    audio_file.write(chunk["data"])
+                elif chunk["type"] == "WordBoundary":
+                    submaker.feed(chunk)
+                    
+        srt_content = submaker.get_srt()
+        return output_audio_path, srt_content
+    except Exception as exc:
+        print(f"    [Warning] Edge-TTS failed: {exc}. Falling back to gTTS (Google TTS)...")
+        try:
+            from gtts import gTTS
+            tts = gTTS(text=text, lang='en', tld='com')
+            tts.save(output_audio_path)
+            
+            # Since gTTS doesn't generate timestamps, we generate mock SRT captions based on duration
+            srt_content = _generate_mock_srt(text, output_audio_path)
+            return output_audio_path, srt_content
+        except Exception as fallback_exc:
+            print(f"    [Error] Fallback gTTS also failed: {fallback_exc}")
+            raise exc
 
 
 def generate_video(image_path, audio_path, srt_content, output_video_path, bg_music_path=None):
