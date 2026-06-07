@@ -186,6 +186,7 @@ def post_reel(video_path, caption):
             )
             status_data = status_res.json()
             status_code = status_data.get("status_code")
+            print(f"    [Instagram] Processing check {i+1}/60: status_code={status_code}, status_data={status_data}")
             
             if status_code == "FINISHED":
                 is_finished = True
