@@ -1264,7 +1264,8 @@ def digest_story_slide(article, path, index, total, lang="en"):
     sw_w = draw.textbbox((0, 0), swipe_text, font=F(28, True, lang=lang))[2]
     draw.text((width - 60 - sw_w, footer_y + 34), swipe_text, font=F(28, True, lang=lang), fill=accent_color)
     
-    source_line = f"{source_label}: {display_source(article['source'])}  |  Slide {index} of {total}"
+    ai_tag = "एआई प्रस्तुति" if lang == "hi" else "AI ASSISTED"
+    source_line = f"{source_label}: {display_source(article['source'])}  |  {ai_tag}  |  Slide {index} of {total}"
     draw.text((60, footer_y + 94), source_line.upper(), font=F(24, True, lang=lang), fill=(100, 105, 120))
     
     canvas.save(path, "JPEG", quality=96)

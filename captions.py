@@ -25,23 +25,29 @@ COMMON_TAGS = (
 
 
 def generate_caption(payload, lang="en"):
+    disclaimer = "\n\n🤖 प्रकटीकरण: वाक् प्रस्तुति एवं दृश्य एआई सहायता से निर्मित। #NewsFlash5" if lang == "hi" else "\n\n🤖 Disclosure: Narration & visual presentation generated with AI assistance. #NewsFlash5"
+
     if lang == "hi":
         if isinstance(payload, dict) and payload.get("type") == "digest":
-            return _template_digest_caption_hindi(payload)
-        return _template_story_caption_hindi(payload)
+            caption = _template_digest_caption_hindi(payload)
+        else:
+            caption = _template_story_caption_hindi(payload)
+        return caption + disclaimer
 
     if isinstance(payload, dict) and payload.get("type") == "digest":
         if GROQ_KEY and "YOUR_" not in GROQ_KEY:
             caption = _groq_digest_caption(payload)
             if caption:
-                return caption
-        return _template_digest_caption(payload)
+                return caption + disclaimer
+        caption = _template_digest_caption(payload)
+        return caption + disclaimer
 
     if GROQ_KEY and "YOUR_" not in GROQ_KEY:
         caption = _groq_story_caption(payload)
         if caption:
-            return caption
-    return _template_story_caption(payload)
+            return caption + disclaimer
+    caption = _template_story_caption(payload)
+    return caption + disclaimer
 
 
 def _groq_digest_caption(payload):

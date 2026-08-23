@@ -336,7 +336,13 @@ def generate_video(image_path, audio_path, srt_content, output_video_path, bg_mu
         fps=24,
         codec="libx264",
         audio_codec="aac",
-        ffmpeg_params=["-pix_fmt", "yuv420p", "-crf", "18", "-preset", "medium"]
+        ffmpeg_params=[
+            "-pix_fmt", "yuv420p",
+            "-crf", "18",
+            "-preset", "medium",
+            "-metadata", "comment=AI Generated News Narration & Visual Format",
+            "-metadata", "artist=News Flash 5"
+        ]
     )
     
     if os.path.exists(audio_path):
@@ -453,7 +459,13 @@ def create_digest_reel(articles, image_paths, lang="en"):
         codec="libx264",
         audio_codec="aac",
         bitrate="10000k",
-        ffmpeg_params=["-pix_fmt", "yuv420p", "-crf", "18", "-preset", "medium"]
+        ffmpeg_params=[
+            "-pix_fmt", "yuv420p",
+            "-crf", "18",
+            "-preset", "medium",
+            "-metadata", "comment=AI Generated News Narration & Visual Format",
+            "-metadata", "artist=News Flash 5"
+        ]
     )
     
     # Cleanup temporary audio files
@@ -571,7 +583,13 @@ def create_digest_reel(articles, image_paths, lang="en"):
         fps=24,
         codec="libx264",
         audio_codec="aac",
-        ffmpeg_params=["-pix_fmt", "yuv420p", "-crf", "18", "-preset", "medium"]
+        ffmpeg_params=[
+            "-pix_fmt", "yuv420p",
+            "-crf", "18",
+            "-preset", "medium",
+            "-metadata", "comment=AI Generated News Narration & Visual Format",
+            "-metadata", "artist=News Flash 5"
+        ]
     )
     
     # Cleanup temporary audio files
