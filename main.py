@@ -254,6 +254,9 @@ def run_digest_pipeline(force=False, lang="both", dry_run=False):
                 successes.append(False)
 
         print(f"\n  Caption preview ({l.upper()}):\n  {caption[:280]}...")
+        if not dry_run and l != languages[-1]:
+            print("\n  [Rate-Limit Cooldown] Pausing 10s before processing next language reel...")
+            time.sleep(10)
 
     if any(successes) and not dry_run:
         mark_posted_titles(article["title"] for article in articles)
