@@ -183,20 +183,31 @@ def post_reel(video_path, caption, lang="en"):
         import time
         video_url = upload_video(video_path)
         
-        # 1. Create Media Container
-        create_res = requests.post(
-            f"{GRAPH}/{ig_user_id}/media",
-            data={
-                "media_type": "REELS",
-                "video_url": video_url,
-                "caption": caption,
-                "access_token": ig_token,
-            },
-            timeout=60,
-        )
-        create_res.raise_for_status()
-        container_id = create_res.json()["id"]
-        
+        # 1. Create Media Container (with 3-attempt retry for single-account posting)
+        container_id = None
+        for attempt in range(3):
+            try:
+                create_res = requests.post(
+                    f"{GRAPH}/{ig_user_id}/media",
+                    data={
+                        "media_type": "REELS",
+                        "video_url": video_url,
+                        "caption": caption,
+                        "access_token": ig_token,
+                    },
+                    timeout=120,
+                )
+                create_res.raise_for_status()
+                container_id = create_res.json()["id"]
+                break
+            except Exception as create_err:
+                print(f"    [Instagram] Container creation attempt {attempt+1}/3 failed: {create_err}")
+                if attempt < 2:
+                    print("    [Instagram] Pausing 15s before retrying container creation...")
+                    time.sleep(15)
+                else:
+                    raise create_err
+
         # 2. Wait for Processing
         print("    Waiting for Instagram to process the video...")
         is_finished = False
@@ -230,6 +241,9 @@ def post_reel(video_path, caption, lang="en"):
             timeout=REQUEST_TIMEOUT,
         ).raise_for_status()
         print(f"    Reel is live on Instagram!")
+        
+        # Brief 10s cooldown after live publish to clear single-account session
+        time.sleep(10)
         return True
     except Exception as exc:
         print(f"    Reel failed: {exc}")
