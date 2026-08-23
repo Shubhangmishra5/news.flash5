@@ -31,7 +31,7 @@ from config import (
 )
 
 GRAPH = "https://graph.facebook.com/v18.0"
-REQUEST_TIMEOUT = 30
+REQUEST_TIMEOUT = 180
 
 
 def _is_configured(value):
