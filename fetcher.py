@@ -259,7 +259,7 @@ def _enrich_from_article_page(article):
 
 
 def _ai_rewrite_article(article):
-    from config import GROQ_KEY
+    from config import GROQ_KEY, GROQ_MODEL
     if not GROQ_KEY or "YOUR_" in GROQ_KEY:
         return article
         
@@ -270,7 +270,7 @@ def _ai_rewrite_article(article):
         
         prompt = f"""
 You are an elite news editor at a top-tier viral media brand (like NowThis, AajTak, Pubity).
-Your job is to transform raw news into highly engaging, scroll-stopping Instagram content.
+Your job is to transform raw news into highly engaging, scroll-stopping Instagram content in both English and Hindi.
 
 Raw News:
 Headline: {article.get('title')}
@@ -283,27 +283,36 @@ Rewrite into a STRICT JSON object using these exact rules:
    Part 1 (before " — "): 4-8 words. The WHAT. Must include specific names, places, or numbers (no clickbait mystery). (e.g. "RBI KEEPS REPO RATE AT 6.5%")
    Part 2 (after " — "): 4-8 words. The WHY/IMPACT. Specific context. (e.g. "Home loan EMIs won't change this year")
    Total max 16 words. Factual, highly informative. Never use "This man" or "Here's why".
-   Example good headlines:
-   - "ISRO CHANDRAYAAN-4 LAUNCHES TODAY — India targets rare dark side moon sample"
-   - "APPLE SALES DROP 10% IN CHINA — iPhone loses ground to Huawei's new tech"
-   - "BCCI ANNOUNCES T20 WORLD CUP SQUAD — Rohit Sharma returns as captain"
 
-2. "hook": 5-8 words. Scroll-stopper for the cover slide. Creates curiosity or urgency. (e.g. "Nobody saw this coming today")
-3. "summary": 2-3 sentences. Clear, factual, non-technical. Tells the story concisely.
-4. "highlights": Exactly 3 bullet points. Each adds NEW information, context, or key numbers.
-5. "category": One of: Politics, Tech, Business, Sports, World, India, Entertainment, Science.
-6. "cta": "Follow @news.flash5 for more updates."
-7. "date": Today's date in DD Mon YYYY format.
-8. "reel_script": 15-20 second spoken script. Short punchy lines. Hook → Facts → Impact → Close.
+2. "headline_hindi": Translate the above "headline" accurately into clean Hindi (using Devanagari script).
 
-TONE: Credible, urgent, informative. NO exaggeration. NO clickbait lies. Factually accurate.
-Return ONLY a valid JSON object with keys: headline, hook, summary, highlights, category, cta, date, reel_script.
+3. "hook": 5-8 words. Scroll-stopper for the cover slide. Creates curiosity or urgency. (e.g. "Nobody saw this coming today")
+4. "hook_hindi": Translate the above "hook" accurately into clean Hindi.
+
+5. "summary": 2-3 sentences. Clear, factual, non-technical. Tells the story concisely in English.
+6. "summary_hindi": Translate/rewrite the above "summary" concisely in clean Hindi (using Devanagari script).
+
+7. "highlights": Exactly 3 bullet points. Each adds NEW information, context, or key numbers.
+8. "highlights_hindi": Translate the 3 bullet points in "highlights" into clean Hindi.
+
+9. "category": One of: Politics, Tech, Business, Sports, World, India, Entertainment, Science.
+10. "cta": "Follow @news.flash5 for more updates."
+11. "cta_hindi": "लेटेस्ट अपडेट्स के लिए @news.flash5.hindi को फॉलो करें।"
+12. "date": Today's date in DD Mon YYYY format.
+
+13. "reel_script": 15-20 second spoken script in English. Short punchy lines. Hook → Facts → Impact → Close.
+14. "reel_script_hindi": A 15-20 second spoken script in clean Hindi (written in Devanagari script) designed for voiceover reading. Short punchy lines.
+
+15. "voiceover_sentence": A single, natural, human-sounding spoken sentence (max 18 words) explaining the news story for a short video voiceover. Avoid robotic tags or headline structure; speak like a live TV news reporter presenting to an audience.
+16. "voiceover_sentence_hindi": A clean Hindi translation/rewrite of "voiceover_sentence" in Devanagari script, sounding like a warm, natural Hindi news presenter.
+
+Return ONLY a valid JSON object with keys: headline, headline_hindi, hook, hook_hindi, summary, summary_hindi, highlights, highlights_hindi, category, cta, cta_hindi, date, reel_script, reel_script_hindi, voiceover_sentence, voiceover_sentence_hindi.
 """
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model=GROQ_MODEL,
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
-            max_tokens=600
+            max_tokens=1200
         )
         data = json.loads(response.choices[0].message.content)
         
@@ -313,7 +322,19 @@ Return ONLY a valid JSON object with keys: headline, hook, summary, highlights, 
         article["ai_summary"] = data.get("summary", article["summary"])
         article["ai_highlights"] = data.get("highlights", [])
         
-        # Save Carousel & Reel Data for potential future pipeline usage
+        # Hindi Fields
+        article["ai_title_hindi"] = data.get("headline_hindi", "")
+        article["ai_hook_hindi"] = data.get("hook_hindi", "")
+        article["ai_summary_hindi"] = data.get("summary_hindi", "")
+        article["ai_highlights_hindi"] = data.get("highlights_hindi", [])
+        article["ai_reel_script_hindi"] = data.get("reel_script_hindi", "")
+        article["ai_cta_hindi"] = data.get("cta_hindi", "")
+        
+        # Custom Voiceover Fields
+        article["ai_voiceover"] = data.get("voiceover_sentence", "")
+        article["ai_voiceover_hindi"] = data.get("voiceover_sentence_hindi", "")
+        
+        # Save Carousel & Reel Data
         article["ai_carousel"] = [
             data.get("slide_1", ""),
             data.get("slide_2", ""),

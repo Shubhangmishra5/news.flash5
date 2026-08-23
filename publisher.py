@@ -22,6 +22,12 @@ from config import (
     REDDIT_USERNAME,
     REDDIT_PASSWORD,
     REDDIT_SUBREDDIT,
+    # Hindi platform keys
+    IG_TOKEN_HINDI,
+    IG_USER_ID_HINDI,
+    FB_PAGE_ID_HINDI,
+    TELEGRAM_CHAT_ID_HINDI,
+    DISCORD_WEBHOOK_URL_HINDI,
 )
 
 GRAPH = "https://graph.facebook.com/v18.0"
@@ -32,10 +38,12 @@ def _is_configured(value):
     return bool(value) and "YOUR_" not in value
 
 
-def _ready():
+def _ready(lang="en"):
+    ig_user_id = IG_USER_ID_HINDI if lang == "hi" and _is_configured(IG_USER_ID_HINDI) else IG_USER_ID
+    ig_token = IG_TOKEN_HINDI if lang == "hi" and _is_configured(IG_TOKEN_HINDI) else IG_TOKEN
     required = [
-        IG_USER_ID,
-        IG_TOKEN,
+        ig_user_id,
+        ig_token,
         CLOUDINARY_CLOUD,
         CLOUDINARY_KEY,
         CLOUDINARY_SECRET,
@@ -58,28 +66,31 @@ def upload(path):
     return url
 
 
-def post_single(image_path, caption):
-    if not _ready():
+def post_single(image_path, caption, lang="en"):
+    if not _ready(lang=lang):
         print("    Instagram keys not set - skipping post (test mode)")
         return False
 
+    ig_user_id = IG_USER_ID_HINDI if lang == "hi" and _is_configured(IG_USER_ID_HINDI) else IG_USER_ID
+    ig_token = IG_TOKEN_HINDI if lang == "hi" and _is_configured(IG_TOKEN_HINDI) else IG_TOKEN
+
     try:
         media_response = requests.post(
-            f"{GRAPH}/{IG_USER_ID}/media",
+            f"{GRAPH}/{ig_user_id}/media",
             data={
                 "image_url": upload(image_path),
                 "caption": caption,
-                "access_token": IG_TOKEN,
+                "access_token": ig_token,
             },
             timeout=REQUEST_TIMEOUT,
         )
         media_response.raise_for_status()
 
         publish_response = requests.post(
-            f"{GRAPH}/{IG_USER_ID}/media_publish",
+            f"{GRAPH}/{ig_user_id}/media_publish",
             data={
                 "creation_id": media_response.json()["id"],
-                "access_token": IG_TOKEN,
+                "access_token": ig_token,
             },
             timeout=REQUEST_TIMEOUT,
         )
@@ -91,23 +102,26 @@ def post_single(image_path, caption):
         return False
 
 
-def post_carousel(image_paths, caption):
-    if not _ready():
+def post_carousel(image_paths, caption, lang="en"):
+    if not _ready(lang=lang):
         print("    Instagram keys not set - skipping post (test mode)")
         return False
 
     if len(image_paths) < 2:
-        return post_single(image_paths[0], caption)
+        return post_single(image_paths[0], caption, lang=lang)
+
+    ig_user_id = IG_USER_ID_HINDI if lang == "hi" and _is_configured(IG_USER_ID_HINDI) else IG_USER_ID
+    ig_token = IG_TOKEN_HINDI if lang == "hi" and _is_configured(IG_TOKEN_HINDI) else IG_TOKEN
 
     try:
         child_ids = []
         for image_path in image_paths:
             child_response = requests.post(
-                f"{GRAPH}/{IG_USER_ID}/media",
+                f"{GRAPH}/{ig_user_id}/media",
                 data={
                     "image_url": upload(image_path),
                     "is_carousel_item": True,
-                    "access_token": IG_TOKEN,
+                    "access_token": ig_token,
                 },
                 timeout=REQUEST_TIMEOUT,
             )
@@ -115,22 +129,22 @@ def post_carousel(image_paths, caption):
             child_ids.append(child_response.json()["id"])
 
         carousel_response = requests.post(
-            f"{GRAPH}/{IG_USER_ID}/media",
+            f"{GRAPH}/{ig_user_id}/media",
             data={
                 "media_type": "CAROUSEL",
                 "children": ",".join(child_ids),
                 "caption": caption,
-                "access_token": IG_TOKEN,
+                "access_token": ig_token,
             },
             timeout=REQUEST_TIMEOUT,
         )
         carousel_response.raise_for_status()
 
         publish_response = requests.post(
-            f"{GRAPH}/{IG_USER_ID}/media_publish",
+            f"{GRAPH}/{ig_user_id}/media_publish",
             data={
                 "creation_id": carousel_response.json()["id"],
-                "access_token": IG_TOKEN,
+                "access_token": ig_token,
             },
             timeout=REQUEST_TIMEOUT,
         )
@@ -150,28 +164,35 @@ def upload_video(path):
         api_key=CLOUDINARY_KEY,
         api_secret=CLOUDINARY_SECRET,
     )
-    result = cloudinary.uploader.upload(path, resource_type="video", folder="newsflash5")
+    try:
+        result = cloudinary.uploader.upload_large(path, resource_type="video", folder="newsflash5", chunk_size=6000000)
+    except Exception:
+        result = cloudinary.uploader.upload(path, resource_type="video", folder="newsflash5")
     print(f"    Uploaded Video {os.path.basename(path)}")
     return result["secure_url"]
 
-def post_reel(video_path, caption):
-    if not _ready():
+def post_reel(video_path, caption, lang="en"):
+    if not _ready(lang=lang):
         print("    Instagram keys not set - skipping reel (test mode)")
         return False
+
+    ig_user_id = IG_USER_ID_HINDI if lang == "hi" and _is_configured(IG_USER_ID_HINDI) else IG_USER_ID
+    ig_token = IG_TOKEN_HINDI if lang == "hi" and _is_configured(IG_TOKEN_HINDI) else IG_TOKEN
+
     try:
         import time
         video_url = upload_video(video_path)
         
         # 1. Create Media Container
         create_res = requests.post(
-            f"{GRAPH}/{IG_USER_ID}/media",
+            f"{GRAPH}/{ig_user_id}/media",
             data={
                 "media_type": "REELS",
                 "video_url": video_url,
                 "caption": caption,
-                "access_token": IG_TOKEN,
+                "access_token": ig_token,
             },
-            timeout=REQUEST_TIMEOUT,
+            timeout=60,
         )
         create_res.raise_for_status()
         container_id = create_res.json()["id"]
@@ -181,7 +202,7 @@ def post_reel(video_path, caption):
         is_finished = False
         for i in range(60): # Wait up to 300 seconds (60 * 5s)
             status_res = requests.get(
-                f"{GRAPH}/{container_id}?fields=status_code&access_token={IG_TOKEN}",
+                f"{GRAPH}/{container_id}?fields=status_code&access_token={ig_token}",
                 timeout=REQUEST_TIMEOUT
             )
             status_data = status_res.json()
@@ -201,10 +222,10 @@ def post_reel(video_path, caption):
             
         # 3. Publish
         requests.post(
-            f"{GRAPH}/{IG_USER_ID}/media_publish",
+            f"{GRAPH}/{ig_user_id}/media_publish",
             data={
                 "creation_id": container_id,
-                "access_token": IG_TOKEN,
+                "access_token": ig_token,
             },
             timeout=REQUEST_TIMEOUT,
         ).raise_for_status()
@@ -216,26 +237,31 @@ def post_reel(video_path, caption):
 
 # --- MULTI-PLATFORM AUTOMATION ---
 
-def _get_page_token():
+def _get_page_token(lang="en"):
     """Exchange the system/IG token for a proper Facebook Page Access Token."""
+    fb_page_id = FB_PAGE_ID_HINDI if lang == "hi" and _is_configured(FB_PAGE_ID_HINDI) else FB_PAGE_ID
+    ig_token = IG_TOKEN_HINDI if lang == "hi" and _is_configured(IG_TOKEN_HINDI) else IG_TOKEN
     page_res = requests.get(
-        f"{GRAPH}/{FB_PAGE_ID}?fields=access_token&access_token={IG_TOKEN}",
+        f"{GRAPH}/{fb_page_id}?fields=access_token&access_token={ig_token}",
         timeout=REQUEST_TIMEOUT
     ).json()
-    return page_res.get("access_token", IG_TOKEN)
+    return page_res.get("access_token", ig_token)
 
 
-def post_to_facebook(image_paths, caption):
+def post_to_facebook(image_paths, caption, lang="en"):
     """Post all carousel slides as a Facebook photo album (multi-photo post)."""
-    if not _is_configured(FB_PAGE_ID) or not _is_configured(IG_TOKEN):
+    fb_page_id = FB_PAGE_ID_HINDI if lang == "hi" and _is_configured(FB_PAGE_ID_HINDI) else FB_PAGE_ID
+    ig_token = IG_TOKEN_HINDI if lang == "hi" and _is_configured(IG_TOKEN_HINDI) else IG_TOKEN
+
+    if not _is_configured(fb_page_id) or not _is_configured(ig_token):
         return
     try:
-        page_token = _get_page_token()
+        page_token = _get_page_token(lang=lang)
 
         if len(image_paths) == 1:
             # Single photo post
             response = requests.post(
-                f"{GRAPH}/{FB_PAGE_ID}/photos",
+                f"{GRAPH}/{fb_page_id}/photos",
                 data={"url": upload(image_paths[0]), "message": caption, "access_token": page_token},
                 timeout=REQUEST_TIMEOUT
             )
@@ -246,7 +272,7 @@ def post_to_facebook(image_paths, caption):
             photo_ids = []
             for path in image_paths:
                 r = requests.post(
-                    f"{GRAPH}/{FB_PAGE_ID}/photos",
+                    f"{GRAPH}/{fb_page_id}/photos",
                     data={
                         "url": upload(path),
                         "published": False,
@@ -268,7 +294,7 @@ def post_to_facebook(image_paths, caption):
                 post_data[f"attached_media[{i}]"] = _json.dumps(pid)
 
             feed_res = requests.post(
-                f"{GRAPH}/{FB_PAGE_ID}/feed",
+                f"{GRAPH}/{fb_page_id}/feed",
                 data=post_data,
                 timeout=REQUEST_TIMEOUT
             )
@@ -283,16 +309,19 @@ def post_to_facebook(image_paths, caption):
             print(f"    Facebook Error Details: {r.text}")
 
 
-def post_reel_to_facebook(video_path, caption):
+def post_reel_to_facebook(video_path, caption, lang="en"):
     """Post the reel video to the Facebook Page video feed."""
-    if not _is_configured(FB_PAGE_ID) or not _is_configured(IG_TOKEN):
+    fb_page_id = FB_PAGE_ID_HINDI if lang == "hi" and _is_configured(FB_PAGE_ID_HINDI) else FB_PAGE_ID
+    ig_token = IG_TOKEN_HINDI if lang == "hi" and _is_configured(IG_TOKEN_HINDI) else IG_TOKEN
+
+    if not _is_configured(fb_page_id) or not _is_configured(ig_token):
         return
     try:
-        page_token = _get_page_token()
+        page_token = _get_page_token(lang=lang)
         video_url = upload_video(video_path)
 
         response = requests.post(
-            f"{GRAPH}/{FB_PAGE_ID}/videos",
+            f"{GRAPH}/{fb_page_id}/videos",
             data={
                 "file_url": video_url,
                 "description": caption,
@@ -308,7 +337,7 @@ def post_reel_to_facebook(video_path, caption):
             print(f"    Facebook Error Details: {response.text}")
 
 
-def post_to_youtube(video_path, caption):
+def post_to_youtube(video_path, caption, lang="en"):
     """Post the reel to YouTube Shorts."""
     import os
     import pickle
@@ -318,31 +347,33 @@ def post_to_youtube(video_path, caption):
     from google.oauth2.credentials import Credentials
     from google_auth_oauthlib.flow import InstalledAppFlow
 
-    # If modifying these scopes, delete the file token.json.
+    # If modifying these scopes, delete the token file.
     SCOPES = ['https://www.googleapis.com/auth/youtube.upload']
 
     if not os.path.exists("client_secrets.json"):
         print("    YouTube upload skipped: client_secrets.json missing.")
         return
 
+    token_file = "token_hindi.json" if lang == "hi" else "token.json"
+
     creds = None
-    if os.path.exists('token.json'):
-        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+    if os.path.exists(token_file):
+        creds = Credentials.from_authorized_user_file(token_file, SCOPES)
     
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             try:
                 creds.refresh(Request())
+                with open(token_file, 'w') as token:
+                    token.write(creds.to_json())
             except Exception as e:
                 print(f"    YouTube token refresh failed: {e}")
-                print("    [!] Please run `python youtube_auth.py` to re-authenticate YouTube.")
+                print(f"    [!] Please run `python youtube_auth.py {'--hindi' if lang == 'hi' else ''}` to re-authenticate YouTube.")
                 return
         else:
             try:
                 flow = InstalledAppFlow.from_client_secrets_file('client_secrets.json', SCOPES)
-                # YouTube authentication needs browser interaction, we assume it's done manually once
-                # if token.json doesn't exist, this might block. Provide instruction to run youtube auth script.
-                print("    [!] YouTube needs authentication. Run `python youtube_auth.py` first.")
+                print(f"    [!] YouTube needs authentication. Run `python youtube_auth.py {'--hindi' if lang == 'hi' else ''}` first.")
                 return
             except Exception as e:
                 print(f"    YouTube Auth Error: {e}")
@@ -361,7 +392,7 @@ def post_to_youtube(video_path, caption):
             title = title[:82] + "..."
         title += " #shorts #news"
             
-        desc = caption + "\n\nSubscribe to @news.flash5 for daily updates!"
+        desc = caption + ("\n\nSubscribe for daily updates!" if lang == "hi" else "\n\nSubscribe to @news.flash5 for daily updates!")
 
         # Extract hashtags from the caption dynamically to use as tags
         dynamic_tags = ['news', 'shorts', 'breaking news', 'newsflash5']
@@ -389,7 +420,7 @@ def post_to_youtube(video_path, caption):
 
         media = MediaFileUpload(video_path, chunksize=-1, resumable=True)
 
-        print("    Uploading to YouTube Shorts...")
+        print(f"    Uploading to YouTube Shorts ({lang.upper()})...")
         request = youtube.videos().insert(
             part="snippet,status",
             body=body,
@@ -408,25 +439,27 @@ def post_to_youtube(video_path, caption):
         print(f"    YouTube post failed: {exc}")
 
 
-def post_to_telegram(image_paths, caption):
-    if not _is_configured(TELEGRAM_BOT_TOKEN) or not _is_configured(TELEGRAM_CHAT_ID):
+def post_to_telegram(image_paths, caption, lang="en"):
+    chat_id = TELEGRAM_CHAT_ID_HINDI if lang == "hi" and _is_configured(TELEGRAM_CHAT_ID_HINDI) else TELEGRAM_CHAT_ID
+    if not _is_configured(TELEGRAM_BOT_TOKEN) or not _is_configured(chat_id):
         return
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMediaGroup"
         media = [{"type": "photo", "media": upload(path)} for path in image_paths[:10]]
         media[0]["caption"] = caption[:1024]
-        response = requests.post(url, json={"chat_id": TELEGRAM_CHAT_ID, "media": media}, timeout=REQUEST_TIMEOUT)
+        response = requests.post(url, json={"chat_id": chat_id, "media": media}, timeout=REQUEST_TIMEOUT)
         response.raise_for_status()
         print("    Posted to Telegram.")
     except Exception as exc:
         print(f"    Telegram post failed: {exc}")
 
-def post_to_discord(image_paths, caption):
-    if not _is_configured(DISCORD_WEBHOOK_URL):
+def post_to_discord(image_paths, caption, lang="en"):
+    webhook_url = DISCORD_WEBHOOK_URL_HINDI if lang == "hi" and _is_configured(DISCORD_WEBHOOK_URL_HINDI) else DISCORD_WEBHOOK_URL
+    if not _is_configured(webhook_url):
         return
     try:
         files = {f"file{i}": open(path, "rb") for i, path in enumerate(image_paths[:10])}
-        requests.post(DISCORD_WEBHOOK_URL, data={"content": caption[:2000]}, files=files, timeout=REQUEST_TIMEOUT)
+        requests.post(webhook_url, data={"content": caption[:2000]}, files=files, timeout=REQUEST_TIMEOUT)
         print("    Posted to Discord.")
     except Exception as exc:
         print(f"    Discord post failed: {exc}")
@@ -563,12 +596,12 @@ def post_to_reddit(image_paths, caption, reel_path=None):
         print(f"    Reddit post failed: {exc}")
 
 
-def distribute_multi_platform(image_paths, caption, reel_path=None):
-    post_to_facebook(image_paths, caption)
+def distribute_multi_platform(image_paths, caption, reel_path=None, lang="en"):
+    post_to_facebook(image_paths, caption, lang=lang)
     if reel_path:
-        post_reel_to_facebook(reel_path, caption)
-        post_to_youtube(reel_path, caption)
-    post_to_telegram(image_paths, caption)
-    post_to_discord(image_paths, caption)
+        post_reel_to_facebook(reel_path, caption, lang=lang)
+        post_to_youtube(reel_path, caption, lang=lang)
+    post_to_telegram(image_paths, caption, lang=lang)
+    post_to_discord(image_paths, caption, lang=lang)
     post_to_twitter(image_paths, caption, reel_path)
     post_to_reddit(image_paths, caption, reel_path)

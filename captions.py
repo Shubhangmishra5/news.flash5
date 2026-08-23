@@ -1,4 +1,4 @@
-from config import GROQ_KEY, PAGE_HANDLE
+from config import GROQ_KEY, GROQ_MODEL, PAGE_HANDLE
 from news_utils import clean_story_summary, clean_story_title, display_source
 
 HASHTAGS = {
@@ -24,7 +24,12 @@ COMMON_TAGS = (
 )
 
 
-def generate_caption(payload):
+def generate_caption(payload, lang="en"):
+    if lang == "hi":
+        if isinstance(payload, dict) and payload.get("type") == "digest":
+            return _template_digest_caption_hindi(payload)
+        return _template_story_caption_hindi(payload)
+
     if isinstance(payload, dict) and payload.get("type") == "digest":
         if GROQ_KEY and "YOUR_" not in GROQ_KEY:
             caption = _groq_digest_caption(payload)
@@ -50,7 +55,7 @@ def _groq_digest_caption(payload):
             for index, article in enumerate(payload["articles"], start=1)
         )
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model=GROQ_MODEL,
             messages=[
                 {
                     "role": "user",
@@ -89,7 +94,7 @@ def _groq_story_caption(article):
 
         client = Groq(api_key=GROQ_KEY)
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model=GROQ_MODEL,
             messages=[
                 {
                     "role": "user",
@@ -174,4 +179,55 @@ def _template_story_caption(article):
         f"Follow {PAGE_HANDLE} for hourly India + world news updates.\n\n"
         f"💬 What are your thoughts on this? Let us know in the comments below! 👇\n\n"
         f"{tags}"
+    )
+
+
+def _template_digest_caption_hindi(payload):
+    from image_maker import translate_to_hindi
+    lines = [
+        "इस घंटे की 5 बड़ी खबरें",
+        "",
+        "देश और दुनिया की ताज़ा एवं सटीक खबरें सबसे पहले।",
+        "",
+    ]
+    for index, article in enumerate(payload["articles"], start=1):
+        title = article.get("ai_title_hindi") or clean_story_title(article["title"], article.get("source", ""))
+        source = translate_to_hindi(display_source(article.get('source', '')))
+        lines.append(f"{index}. {title} ({source})")
+
+    hindi_tags = "#हिंदीसमाचार #ताज़ाखबर #बड़ीखबरें #समाचार #NewsInHindi #HindiNews #newsflash5 #DailyDigest"
+    lines.extend(
+        [
+            "",
+            "💬 इन 5 खबरों में से आपको कौन सी खबर सबसे महत्वपूर्ण लगी? नीचे कमेंट में अपनी राय बताएं! 👇",
+            "",
+            "ताज़ा और सटीक खबरों के लिए @news.flash5.hindi को फॉलो करें।",
+            "",
+            hindi_tags,
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _template_story_caption_hindi(article):
+    from image_maker import translate_to_hindi
+    title = article.get("ai_title_hindi") or clean_story_title(article["title"], article.get("source", ""))
+    summary = article.get("ai_summary_hindi") or clean_story_summary(article.get("summary", ""), article["title"], article.get("source", ""))
+    source = translate_to_hindi(display_source(article.get('source', '')))
+    
+    highlights_lines = ""
+    bullets = article.get("ai_highlights_hindi", [])
+    if bullets:
+        highlights_lines = "\n" + "\n".join(f"• {b}" for b in bullets) + "\n"
+        
+    hindi_tags = "#हिंदीसमाचार #ताज़ाखबर #बड़ीखबर #समाचार #NewsInHindi #HindiNews #newsflash5"
+    
+    return (
+        f"{title.upper()}\n\n"
+        f"{summary}\n"
+        f"{highlights_lines}\n"
+        f"स्रोत: {source}\n"
+        f"ताज़ा और सटीक खबरों के लिए @news.flash5.hindi को फॉलो करें।\n\n"
+        f"💬 इस खबर पर आपकी क्या राय है? नीचे कमेंट में बताएं! 👇\n\n"
+        f"{hindi_tags}"
     )

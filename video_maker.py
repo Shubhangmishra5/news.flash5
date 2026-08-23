@@ -3,16 +3,54 @@ import asyncio
 import re
 import textwrap
 import requests
+import socket
 from pathlib import Path
 from datetime import datetime
+
+# Prevent synchronous network requests (e.g. gTTS or requests) from hanging indefinitely
+socket.setdefaulttimeout(15.0)
 
 import numpy as np
 import edge_tts
 from PIL import Image, ImageDraw, ImageFont
 from moviepy import ImageClip, AudioFileClip, concatenate_videoclips, CompositeAudioClip, vfx
 
+from config import VOICE_EN, VOICE_HI, VOICE_RATE, VOICE_PITCH
+
 OUTPUT_DIR = Path("output_posts")
 OUTPUT_DIR.mkdir(exist_ok=True)
+
+# High-Retention Pattern Interrupt Intro & Comment-Driving Outro Pools
+INTRO_POOL_EN = [
+    "Wait, did you hear what just happened today? Here are your top 5 stories.",
+    "Hold on, before you scroll — here are the top 5 updates breaking the internet right now.",
+    "Stop scrolling! Here is the biggest news roundup you need to hear today.",
+    "Here are the five key stories you shouldn't miss right now.",
+    "Let's check out the top updates making headlines across the world today."
+]
+
+INTRO_POOL_HI = [
+    "रुको! क्या आपने आज की यह बड़ी खबर सुनी? चलिए जानते हैं आज की 5 बड़ी खबरें।",
+    "स्क्रॉल करने से पहले रुकिए — यहाँ हैं आज की 5 सबसे महत्वपूर्ण खबरें।",
+    "खबरदार! आज दुनिया भर में क्या बड़ा हुआ, चलिए 60 सेकंड में जानते हैं।",
+    "आज की 5 बड़ी खबरें जो आपको जाननी बेहद ज़रूरी हैं।",
+    "नमस्कार, न्यूज़ फ़्लैश फाइव में आपका स्वागत है। चलिए शुरू करते हैं।"
+]
+
+OUTRO_POOL_EN = [
+    " Which of these 5 stories surprised you the most? Drop your thoughts in the comments below!",
+    " What is your take on today's headlines? Comment your opinion right now!",
+    " Don't forget to like, comment your thoughts, and follow News Flash 5 for daily updates.",
+    " Which update do you think will impact you the most? Let us know below!",
+    " Keep yourself ahead of the news — follow @news.flash5 for more."
+]
+
+OUTRO_POOL_HI = [
+    " इनमें से किस खबर ने आपको सबसे ज्यादा हैरान किया? कमेंट सेक्शन में अपनी राय ज़रूर दें!",
+    " आज की इन बड़ी खबरों पर आपकी क्या राय है? कमेंट में बताएं और न्यूज़ फ़्लैश 5 को फॉलो करें!",
+    " आपकी इस बारे में क्या सोच है? कमेंट करके हमें बताइए और चैनल को सब्सक्राइब करें!",
+    " अगले बड़े अपडेट के लिए न्यूज़ फ़्लैश 5 को फॉलो करना न भूलें।"
+]
 
 MUSIC_HEADERS = {
     "User-Agent": (
@@ -24,22 +62,40 @@ MUSIC_HEADERS = {
 
 
 def check_and_download_bg_music():
-    """Ensure assets/music directory exists and download a premium copyright-free background track if missing."""
+    """Ensure assets/music directory exists and download a pool of premium copyright-free tracks."""
+    import random
     music_dir = Path("assets/music")
     music_dir.mkdir(parents=True, exist_ok=True)
-    default_bg = music_dir / "default_bg.mp3"
-    if not default_bg.exists():
-        print("    [Music] Downloading default royalty-free background track...")
-        try:
-            url = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
-            response = requests.get(url, headers=MUSIC_HEADERS, timeout=15)
-            response.raise_for_status()
-            with open(default_bg, "wb") as f:
-                f.write(response.content)
-            print("    [Music] Successfully saved default background track!")
-        except Exception as e:
-            print(f"    [Music] Failed to download background music: {e}")
-    return str(default_bg) if default_bg.exists() else None
+    
+    tracks = {
+        "track_1.mp3": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+        "track_2.mp3": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+        "track_3.mp3": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
+        "track_4.mp3": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3",
+        "track_5.mp3": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3"
+    }
+    
+    downloaded_tracks = []
+    for name, url in tracks.items():
+        track_path = music_dir / name
+        if not track_path.exists():
+            print(f"    [Music] Downloading premium track: {name}...")
+            try:
+                response = requests.get(url, headers=MUSIC_HEADERS, timeout=15)
+                response.raise_for_status()
+                with open(track_path, "wb") as f:
+                    f.write(response.content)
+                print(f"    [Music] Successfully saved track: {name}")
+            except Exception as e:
+                print(f"    [Music] Failed to download {name}: {e}")
+        if track_path.exists():
+            downloaded_tracks.append(str(track_path))
+            
+    if downloaded_tracks:
+        selected = random.choice(downloaded_tracks)
+        print(f"    [Music] Randomly selected background track: {os.path.basename(selected)}")
+        return selected
+    return None
 
 
 def mix_background_music(voiceover_clip, bg_music_path):
@@ -55,8 +111,8 @@ def mix_background_music(voiceover_clip, bg_music_path):
             bg_audio = concatenate_audioclips([bg_audio] * loops)
             
         bg_audio = bg_audio.with_duration(voiceover_clip.duration)
-        # Set background volume to a subtle 12% to prevent overpowering the AI voice (MoviePy 2.0 syntax)
-        bg_audio = bg_audio.with_volume_scaled(0.12)
+        # Set background volume to a subtle 8% to prevent overpowering the AI voice (MoviePy 2.0 syntax)
+        bg_audio = bg_audio.with_volume_scaled(0.08)
         
         mixed = CompositeAudioClip([voiceover_clip, bg_audio])
         return mixed
@@ -129,7 +185,7 @@ def overlay_subtitles(video_clip, srt_content):
         # Wrap text perfectly for vertical width
         wrapped_lines = textwrap.wrap(active_text, width=24)
         
-        # Center subtitles near bottom (safe zone y = 1350)
+        # Center subtitles near bottom (safe zone y = 1320)
         y_start = 1320
         for line in wrapped_lines:
             bbox = draw.textbbox((0, 0), line, font=font)
@@ -194,28 +250,53 @@ def _generate_mock_srt(text, audio_path):
     return "\n".join(lines)
 
 
-async def generate_voiceover(text, output_audio_path):
-    """Generate professional AI voiceover and return the raw SRT subtitle content."""
-    print("    Generating AI Voiceover & Subtitles...")
+async def generate_voiceover(text, output_audio_path, lang="en"):
+    """Generate professional AI voiceover and return the raw SRT subtitle content with natural human news anchor cadence."""
+    print(f"    Generating AI Voiceover & Subtitles ({lang.upper()})...")
+    
+    # Normalize text for ultra-natural news anchor pronunciation & breathing pauses
+    clean_text = text.replace("’", "'").replace("‘", "'").replace("“", '"').replace("”", '"')
+    if lang == "hi":
+        clean_text = clean_text.replace("%", " प्रतिशत ").replace("&", " और ").replace("  ", " ")
+        # Ensure Devanagari danda / full stop has a slight pause
+        clean_text = clean_text.replace("।", "। ")
+    else:
+        clean_text = clean_text.replace("%", " percent ").replace("&", " and ").replace("  ", " ")
+        clean_text = clean_text.replace(" - ", ", ").replace(" -- ", ", ")
+
     try:
-        voice = "en-US-AndrewMultilingualNeural"
-        communicate = edge_tts.Communicate(text, voice, rate="+5%")
+        if lang == "hi":
+            voice = VOICE_HI
+        else:
+            voice = VOICE_EN
+            
+        communicate = edge_tts.Communicate(clean_text, voice, rate=VOICE_RATE, pitch=VOICE_PITCH)
         submaker = edge_tts.SubMaker()
         
-        with open(output_audio_path, "wb") as audio_file:
-            async for chunk in communicate.stream():
-                if chunk["type"] == "audio":
-                    audio_file.write(chunk["data"])
-                elif chunk["type"] == "WordBoundary":
-                    submaker.feed(chunk)
+        async def _stream_tts():
+            with open(output_audio_path, "wb") as audio_file:
+                async for chunk in communicate.stream():
+                    if chunk["type"] == "audio":
+                        audio_file.write(chunk["data"])
+                    elif chunk["type"] == "WordBoundary":
+                        submaker.feed(chunk)
+                        
+        await asyncio.wait_for(_stream_tts(), timeout=25.0)
+        
+        # Verify that the audio file was written and is not empty or too small
+        if not os.path.exists(output_audio_path) or os.path.getsize(output_audio_path) < 1000:
+            raise ValueError("Generated audio file is empty or too small")
                     
         srt_content = submaker.get_srt()
+        if not srt_content or len(srt_content.strip()) < 10:
+            print("    [Warning] Empty or short subtitles from edge-tts. Generating mock subtitles.")
+            srt_content = _generate_mock_srt(text, output_audio_path)
         return output_audio_path, srt_content
     except Exception as exc:
         print(f"    [Warning] Edge-TTS failed: {exc}. Falling back to gTTS (Google TTS)...")
         try:
             from gtts import gTTS
-            tts = gTTS(text=text, lang='en', tld='com')
+            tts = gTTS(text=text, lang='hi' if lang == 'hi' else 'en', tld='co.in' if lang == 'hi' else 'com')
             tts.save(output_audio_path)
             
             # Since gTTS doesn't generate timestamps, we generate mock SRT captions based on duration
@@ -255,8 +336,7 @@ def generate_video(image_path, audio_path, srt_content, output_video_path, bg_mu
         fps=24,
         codec="libx264",
         audio_codec="aac",
-        ffmpeg_params=["-pix_fmt", "yuv420p"],
-        logger=None
+        ffmpeg_params=["-pix_fmt", "yuv420p", "-crf", "18", "-preset", "medium"]
     )
     
     if os.path.exists(audio_path):
@@ -266,35 +346,44 @@ def generate_video(image_path, audio_path, srt_content, output_video_path, bg_mu
     return output_video_path
 
 
-def create_reel(article, image_path):
+def create_reel(article, image_path, lang="en"):
     """Autopilot single reel generation with all V2.0 premium enhancements."""
-    script = article.get("ai_reel_script", "")
-    if not script:
-        script = f"{article.get('ai_title', '')}. {article.get('ai_summary', '')} Follow News Flash 5 for updates."
+    if lang == "hi":
+        script = article.get("ai_reel_script_hindi", "")
+        if not script:
+            script = f"{article.get('ai_title_hindi', '')}। और जानकारी के लिए न्यूज़ फ़्लैश 5 को फॉलो करें।"
+    else:
+        script = article.get("ai_reel_script", "")
+        if not script:
+            script = f"{article.get('ai_title', '')}. {article.get('ai_summary', '')} Follow News Flash 5 for updates."
         
     filename = os.path.basename(image_path).replace(".jpg", "")
-    audio_path = str(OUTPUT_DIR / f"{filename}_audio.mp3")
-    video_path = str(OUTPUT_DIR / f"{filename}_reel.mp4")
+    audio_path = str(OUTPUT_DIR / f"{filename}_{lang}_audio.mp3")
+    video_path = str(OUTPUT_DIR / f"{filename}_{lang}_reel.mp4")
     
     bg_music_path = check_and_download_bg_music()
-    audio_path, srt_content = asyncio.run(generate_voiceover(script, audio_path))
+    audio_path, srt_content = asyncio.run(generate_voiceover(script, audio_path, lang=lang))
     
     final_video = generate_video(image_path, audio_path, srt_content, video_path, bg_music_path)
     return final_video
 
 
-def create_digest_reel(articles, image_paths):
+def create_digest_reel(articles, image_paths, lang="en"):
     """Stitch 5 distinct news slides with dynamic zooms, crossfade transitions, background music, and subtitles."""
-    print("\n  Generating Digest Video Reel...")
+    import random
+    print(f"\n  Generating Digest Video Reel ({lang.upper()})...")
     bg_music_path = check_and_download_bg_music()
     
     video_clips = []
     temp_audio_files = []
     
     # 1. Slide 1 (Cover)
-    cover_script = "Here are your top stories for the hour."
-    cover_audio_path = str(OUTPUT_DIR / "temp_cover_audio.mp3")
-    cover_audio_path, cover_srt = asyncio.run(generate_voiceover(cover_script, cover_audio_path))
+    if lang == "hi":
+        cover_script = random.choice(INTRO_POOL_HI)
+    else:
+        cover_script = random.choice(INTRO_POOL_EN)
+    cover_audio_path = str(OUTPUT_DIR / f"temp_cover_audio_{lang}.mp3")
+    cover_audio_path, cover_srt = asyncio.run(generate_voiceover(cover_script, cover_audio_path, lang=lang))
     temp_audio_files.append(cover_audio_path)
     
     cover_audio = AudioFileClip(cover_audio_path)
@@ -304,17 +393,32 @@ def create_digest_reel(articles, image_paths):
     cover_clip = overlay_subtitles(cover_clip, cover_srt)
     video_clips.append(cover_clip)
     
+    # Imports inside for safety/cleanliness
+    from image_maker import translate_to_hindi
+    
     # 2. Slides 2-6 (Stories)
     for i, article in enumerate(articles):
-        category = article.get('category', 'News').capitalize()
-        headline = article.get('ai_title', article.get('title', ''))
-        
-        script = f"In {category}, {headline}."
-        if i == len(articles) - 1:
-            script += " Follow News Flash 5 for more updates."
+        if lang == "hi":
+            script = article.get('ai_voiceover_hindi')
+            if not script or len(script.strip()) < 5:
+                category = translate_to_hindi(article.get('category', 'News'))
+                headline = article.get('ai_title_hindi', article.get('title', ''))
+                script = f"{category} में, {headline}।"
             
-        audio_path = str(OUTPUT_DIR / f"temp_story_{i}_audio.mp3")
-        audio_path, story_srt = asyncio.run(generate_voiceover(script, audio_path))
+            if i == len(articles) - 1:
+                script += random.choice(OUTRO_POOL_HI)
+        else:
+            script = article.get('ai_voiceover')
+            if not script or len(script.strip()) < 5:
+                category = article.get('category', 'News').capitalize()
+                headline = article.get('ai_title', article.get('title', ''))
+                script = f"In {category}, {headline}."
+            
+            if i == len(articles) - 1:
+                script += random.choice(OUTRO_POOL_EN)
+            
+        audio_path = str(OUTPUT_DIR / f"temp_story_{lang}_{i}_audio.mp3")
+        audio_path, story_srt = asyncio.run(generate_voiceover(script, audio_path, lang=lang))
         temp_audio_files.append(audio_path)
         
         audio = AudioFileClip(audio_path)
@@ -341,15 +445,133 @@ def create_digest_reel(articles, image_paths):
     background = ColorClip(size=(1080, 1920), color=(12, 5, 8)).with_duration(final_video.duration)
     final_video_padded = CompositeVideoClip([background, final_video.with_position("center")]).with_audio(mixed_audio)
     
-    video_path = str(OUTPUT_DIR / f"digest_reel_{datetime.now().strftime('%H%M%S')}.mp4")
+    video_path = str(OUTPUT_DIR / f"digest_reel_{lang}_{datetime.now().strftime('%H%M%S')}.mp4")
     
     final_video_padded.write_videofile(
         video_path,
         fps=24,
         codec="libx264",
         audio_codec="aac",
-        ffmpeg_params=["-pix_fmt", "yuv420p"],
-        logger=None
+        bitrate="10000k",
+        ffmpeg_params=["-pix_fmt", "yuv420p", "-crf", "18", "-preset", "medium"]
+    )
+    
+    # Cleanup temporary audio files
+    for p in temp_audio_files:
+        if os.path.exists(p):
+            os.remove(p)
+            
+    print(f"    Digest Reel successfully rendered: {video_path}")
+    return video_path
+
+
+def create_reel(article, image_path, lang="en"):
+    """Autopilot single reel generation with all V2.0 premium enhancements."""
+    if lang == "hi":
+        script = article.get("ai_reel_script_hindi", "")
+        if not script:
+            script = f"{article.get('ai_title_hindi', '')}। और जानकारी के लिए न्यूज़ फ़्लैश 5 को फॉलो करें।"
+    else:
+        script = article.get("ai_reel_script", "")
+        if not script:
+            script = f"{article.get('ai_title', '')}. {article.get('ai_summary', '')} Follow News Flash 5 for updates."
+        
+    filename = os.path.basename(image_path).replace(".jpg", "")
+    audio_path = str(OUTPUT_DIR / f"{filename}_{lang}_audio.mp3")
+    video_path = str(OUTPUT_DIR / f"{filename}_{lang}_reel.mp4")
+    
+    bg_music_path = check_and_download_bg_music()
+    audio_path, srt_content = asyncio.run(generate_voiceover(script, audio_path, lang=lang))
+    
+    final_video = generate_video(image_path, audio_path, srt_content, video_path, bg_music_path)
+    return final_video
+
+
+def create_digest_reel(articles, image_paths, lang="en"):
+    """Stitch 5 distinct news slides with dynamic zooms, crossfade transitions, background music, and subtitles."""
+    import random
+    print(f"\n  Generating Digest Video Reel ({lang.upper()})...")
+    bg_music_path = check_and_download_bg_music()
+    
+    video_clips = []
+    temp_audio_files = []
+    
+    # 1. Slide 1 (Cover)
+    if lang == "hi":
+        cover_script = random.choice(INTRO_POOL_HI)
+    else:
+        cover_script = random.choice(INTRO_POOL_EN)
+    cover_audio_path = str(OUTPUT_DIR / f"temp_cover_audio_{lang}.mp3")
+    cover_audio_path, cover_srt = asyncio.run(generate_voiceover(cover_script, cover_audio_path, lang=lang))
+    temp_audio_files.append(cover_audio_path)
+    
+    cover_audio = AudioFileClip(cover_audio_path)
+    cover_clip = ImageClip(image_paths[0]).with_duration(cover_audio.duration).with_audio(cover_audio)
+    # Add simple zoom & subtitles
+    cover_clip = cover_clip.resized(lambda t: 1.0 + (0.06 * (t / cover_audio.duration)))
+    cover_clip = overlay_subtitles(cover_clip, cover_srt)
+    video_clips.append(cover_clip)
+    
+    # Imports inside for safety/cleanliness
+    from image_maker import translate_to_hindi
+    
+    # 2. Slides 2-6 (Stories)
+    for i, article in enumerate(articles):
+        if lang == "hi":
+            script = article.get('ai_voiceover_hindi')
+            if not script or len(script.strip()) < 5:
+                category = translate_to_hindi(article.get('category', 'News'))
+                headline = article.get('ai_title_hindi', article.get('title', ''))
+                script = f"{category} में, {headline}।"
+            
+            if i == len(articles) - 1:
+                script += random.choice(OUTRO_POOL_HI)
+        else:
+            script = article.get('ai_voiceover')
+            if not script or len(script.strip()) < 5:
+                category = article.get('category', 'News').capitalize()
+                headline = article.get('ai_title', article.get('title', ''))
+                script = f"In {category}, {headline}."
+            
+            if i == len(articles) - 1:
+                script += random.choice(OUTRO_POOL_EN)
+            
+        audio_path = str(OUTPUT_DIR / f"temp_story_{lang}_{i}_audio.mp3")
+        audio_path, story_srt = asyncio.run(generate_voiceover(script, audio_path, lang=lang))
+        temp_audio_files.append(audio_path)
+        
+        audio = AudioFileClip(audio_path)
+        img_clip = ImageClip(image_paths[i+1]).with_duration(audio.duration).with_audio(audio)
+        
+        # Apply Ken Burns Zoom & Subtitles to this slide
+        img_clip = img_clip.resized(lambda t: 1.0 + (0.06 * (t / audio.duration)))
+        img_clip = overlay_subtitles(img_clip, story_srt)
+        
+        # Smooth crossfade transition between news slides (MoviePy 2.0 style)
+        img_clip = img_clip.with_effects([vfx.CrossFadeIn(0.4)])
+        video_clips.append(img_clip)
+        
+    # 3. Stitch them all together with transitions
+    final_video = concatenate_videoclips(video_clips, method="compose")
+    
+    # 4. Apply background music to the entire combined video
+    final_audio = final_video.audio
+    mixed_audio = mix_background_music(final_audio, bg_music_path)
+    final_video = final_video.with_audio(mixed_audio)
+    
+    # 5. Fit/Pad the 1080x1350 video onto a 1080x1920 (9:16) Reels canvas
+    from moviepy import ColorClip, CompositeVideoClip
+    background = ColorClip(size=(1080, 1920), color=(12, 5, 8)).with_duration(final_video.duration)
+    final_video_padded = CompositeVideoClip([background, final_video.with_position("center")]).with_audio(mixed_audio)
+    
+    video_path = str(OUTPUT_DIR / f"digest_reel_{lang}_{datetime.now().strftime('%H%M%S')}.mp4")
+    
+    final_video_padded.write_videofile(
+        video_path,
+        fps=24,
+        codec="libx264",
+        audio_codec="aac",
+        ffmpeg_params=["-pix_fmt", "yuv420p", "-crf", "18", "-preset", "medium"]
     )
     
     # Cleanup temporary audio files

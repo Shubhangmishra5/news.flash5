@@ -46,25 +46,66 @@ PEXELS_QUERIES = {
     "EDUCATION": ["university students", "college campus", "library studying"],
     "CAREERS": ["office workplace", "corporate hiring", "employees teamwork"],
 }
+
+HINDI_TRANSLATE = {
+    "INDIA": "भारत",
+    "WORLD": "दुनिया",
+    "BUSINESS": "बिज़नेस",
+    "TECH": "तकनीक",
+    "SPORTS": "खेल",
+    "ENTERTAINMENT": "मनोरंजन",
+    "SCIENCE": "विज्ञान",
+    "POLITICS": "राजनीति",
+    "BREAKING": "ब्रेकिंग न्यूज़",
+    "BREAKING NEWS": "ब्रेकिंग न्यूज़",
+    "SUMMARY EXCLUSIVE": "विशेष सारांश",
+    "KEY FACTS": "मुख्य तथ्य",
+    "KEY HIGHLIGHTS": "मुख्य झलकियां",
+    "WATCH FULL BREAKDOWN": "पूरा विश्लेषण देखें",
+    "WAIT TILL YOU SEE": "अंत तक देखें",
+    "THE LAST ONE...": "बहुत महत्वपूर्ण है...",
+    "FAST . FACTUAL . ESSENTIAL": "तेज़ . सटीक . ज़रूरी",
+    "GLOBAL UPDATES": "ग्लोबल अपडेट्स",
+    "POLITICS & GOVERNANCE": "राजनीति एवं शासन",
+    "ECONOMY IN FOCUS": "अर्थव्यवस्था",
+    "PEOPLE & SOCIETY": "लोग और समाज",
+    "MORE STORIES INSIDE": "अन्य मुख्य खबरें",
+    "UPDATED": "अपडेटेड",
+    "STAY INFORMED. STAY AHEAD.": "सटीक जानकारी, सबसे पहले।",
+    "Follow for breaking news 24/7": "24/7 ताज़ा खबरों के लिए फॉलो करें"
+}
+
+def translate_to_hindi(text):
+    text_upper = str(text).upper().strip()
+    return HINDI_TRANSLATE.get(text_upper, text)
+
+
+def _add_bottom_vignette(image):
+    """Add a smooth dark gradient vignette to the lower half of the background image to ensure text legibility while keeping top/center photo 100% sharp."""
+    width, height = image.size
+    overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    
+    # Gradient starts smoothly at 25% height down to 88% opacity near bottom
+    start_y = int(height * 0.25)
+    gradient_height = max(1, height - start_y)
+    
+    for y in range(start_y, height):
+        ratio = (y - start_y) / gradient_height
+        alpha = int(225 * (ratio ** 1.5)) # Non-linear smooth curve for natural vignette
+        draw.line([(0, y), (width, y)], fill=(10, 11, 16, alpha))
+        
+    return Image.alpha_composite(image.convert("RGBA"), overlay).convert("RGB")
+
+
 def _fit_image(image, width, height, fit=True):
     img = image.convert("RGB")
     
     if fit:
-        # Create a blurred background that fills the entire 1080x1920 canvas
-        bg = ImageOps.fit(img, (width, height), Image.LANCZOS)
-        bg = bg.filter(ImageFilter.GaussianBlur(radius=40))
-        bg = ImageEnhance.Brightness(bg).enhance(0.5) # Darken bg slightly
-        
-        # Resize original image to fit perfectly inside the width without cropping
-        # and paste it vertically centered on the blurred background
-        fg = ImageOps.contain(img, (width, height), Image.LANCZOS)
-        
-        # Calculate coordinates to paste fg centered on bg
-        x = (width - fg.width) // 2
-        y = (height - fg.height) // 2
-        bg.paste(fg, (x, y))
-        
-        return bg
+        # Crisp full-bleed 1080p sharp image fit (no heavy blur side panels)
+        scaled = ImageOps.fit(img, (width, height), Image.LANCZOS)
+        # Apply smooth dark bottom vignette gradient overlay
+        return _add_bottom_vignette(scaled)
         
     return ImageOps.contain(img, (width, height), Image.LANCZOS)
 
@@ -177,8 +218,8 @@ def paste_logo(canvas, x_coord, y_coord, size=90):
         pass
 
 
-def F(size, bold=True, impact=False):
-    if impact:
+def F(size, bold=True, impact=False, lang="en"):
+    if impact and lang == "en":
         local_path = BASE_DIR / "assets" / "fonts" / "Anton-Regular.ttf"
         if local_path.exists():
             return ImageFont.truetype(str(local_path), size)
@@ -187,12 +228,13 @@ def F(size, bold=True, impact=False):
             "C:/Windows/Fonts/arialbd.ttf",
             "/usr/share/fonts/truetype/msttcorefonts/Impact.ttf",
         ]
-    elif bold:
-        local_path = BASE_DIR / "assets" / "fonts" / "Roboto-Bold.ttf"
+    elif bold or (impact and lang != "en"):
+        font_name = "Poppins-Bold.ttf" if lang != "en" else "Roboto-Bold.ttf"
+        local_path = BASE_DIR / "assets" / "fonts" / font_name
         if local_path.exists():
             return ImageFont.truetype(str(local_path), size)
         font_paths = [
-            "C:/Windows/Fonts/arialbd.ttf",
+            "C:/Windows/Fonts/mangal.ttf" if lang != "en" else "C:/Windows/Fonts/arialbd.ttf",
             "C:/Windows/Fonts/verdanab.ttf",
             "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
             "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
@@ -200,11 +242,12 @@ def F(size, bold=True, impact=False):
             "/System/Library/Fonts/Helvetica.ttc",
         ]
     else:
-        local_path = BASE_DIR / "assets" / "fonts" / "Roboto-Regular.ttf"
+        font_name = "Poppins-Regular.ttf" if lang != "en" else "Roboto-Regular.ttf"
+        local_path = BASE_DIR / "assets" / "fonts" / font_name
         if local_path.exists():
             return ImageFont.truetype(str(local_path), size)
         font_paths = [
-            "C:/Windows/Fonts/arial.ttf",
+            "C:/Windows/Fonts/mangal.ttf" if lang != "en" else "C:/Windows/Fonts/arial.ttf",
             "C:/Windows/Fonts/verdana.ttf",
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
             "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
@@ -279,11 +322,16 @@ def _summary_lines(summary, width=34, max_lines=3, max_chars=170):
     return textwrap.wrap(shorten(summary, max_chars), width=width)[:max_lines]
 
 
-def slide1_main(article, path):
+def slide1_main(article, path, lang="en"):
     width, height = 1080, 1350
     print("    Slide 1 - MAIN...")
-    headline_text = article.get("ai_title") or slide_headline(article, max_chars=95)
-    summary_text = article.get("ai_summary") or slide_summary(article, max_chars=150)
+    
+    if lang == "hi":
+        headline_text = article.get("ai_title_hindi") or article.get("ai_title") or slide_headline(article, max_chars=95)
+        summary_text = article.get("ai_summary_hindi") or article.get("ai_summary") or slide_summary(article, max_chars=150)
+    else:
+        headline_text = article.get("ai_title") or slide_headline(article, max_chars=95)
+        summary_text = article.get("ai_summary") or slide_summary(article, max_chars=150)
     
     # 1. Start with a premium dark canvas
     canvas = Image.new("RGB", (width, height), C["dark_bg"])
@@ -321,9 +369,11 @@ def slide1_main(article, path):
     tag_y = 180
     is_breaking = article.get("breaking")
     tag_text = "BREAKING NEWS" if is_breaking else category_name
+    if lang == "hi":
+        tag_text = translate_to_hindi(tag_text)
     tag_bg = C["red"] if is_breaking else accent_color
     
-    tag_font = F(28, True)
+    tag_font = F(28, True, lang=lang)
     tb = draw.textbbox((0, 0), tag_text, font=tag_font)
     tw = tb[2] - tb[0]
     th = tb[3] - tb[1]
@@ -341,7 +391,7 @@ def slide1_main(article, path):
     
     # 7. Sleek, Premium Headline (starts at y=260)
     headline_y = 260
-    headline_font = F(64, True)
+    headline_font = F(64, True, lang=lang)
     
     wrapped_headline = textwrap.wrap(headline_text, width=24)[:4]
     
@@ -368,7 +418,7 @@ def slide1_main(article, path):
     
     # 8. Premium Summary Card at the bottom (y=650)
     summary_y = 650
-    summary_font = F(38, False)
+    summary_font = F(38, False, lang=lang)
     wrapped_summary = textwrap.wrap(summary_text, width=44)[:4]
     
     card_x1 = 50
@@ -378,7 +428,8 @@ def slide1_main(article, path):
     
     draw.rounded_rectangle([card_x1, card_y1, card_x2, card_y2], radius=16, fill=(20, 22, 32, 180), outline=(45, 48, 65), width=2)
     
-    draw.text((74, summary_y), "SUMMARY EXCLUSIVE", font=F(26, True), fill=accent_color)
+    card_title = translate_to_hindi("SUMMARY EXCLUSIVE") if lang == "hi" else "SUMMARY EXCLUSIVE"
+    draw.text((74, summary_y), card_title, font=F(26, True, lang=lang), fill=accent_color)
     summary_y += 42
     
     for line in wrapped_summary:
@@ -391,24 +442,31 @@ def slide1_main(article, path):
     
     paste_logo(canvas, 60, footer_y, size=60)
     draw = ImageDraw.Draw(canvas)
-    draw.text((134, footer_y + 12), PAGE_HANDLE, font=F(32, True), fill=C["white"])
+    handle_text = f"{PAGE_HANDLE}.hindi" if lang == "hi" else PAGE_HANDLE
+    draw.text((134, footer_y + 12), handle_text, font=F(32, True, lang=lang), fill=C["white"])
     
-    swipe_text = "Swipe for context →"
-    sw_w = draw.textbbox((0, 0), swipe_text, font=F(28, True))[2]
-    draw.text((width - 60 - sw_w, footer_y + 14), swipe_text, font=F(28, True), fill=accent_color)
+    swipe_text = translate_to_hindi("Swipe for context →") if lang == "hi" else "Swipe for context →"
+    sw_w = draw.textbbox((0, 0), swipe_text, font=F(28, True, lang=lang))[2]
+    draw.text((width - 60 - sw_w, footer_y + 14), swipe_text, font=F(28, True, lang=lang), fill=accent_color)
     
-    source_line = f"Source: {display_source(article['source'])}  |  {datetime.now().strftime('%d %b %Y')}"
-    draw.text((60, footer_y + 80), source_line.upper(), font=F(24, True), fill=(100, 105, 120))
+    source_label = "स्रोत" if lang == "hi" else "Source"
+    source_line = f"{source_label}: {display_source(article['source'])}  |  {datetime.now().strftime('%d %b %Y')}"
+    draw.text((60, footer_y + 80), source_line.upper(), font=F(24, True, lang=lang), fill=(100, 105, 120))
     
     canvas.save(path, "JPEG", quality=96)
     return path
 
 
-def slide2_facts(article, path):
+def slide2_facts(article, path, lang="en"):
     width, height = 1080, 1350
     print("    Slide 2 - FACTS...")
-    headline_text = article.get("ai_title") or slide_headline(article, max_chars=75)
-    summary_text = article.get("ai_summary") or slide_summary(article, max_chars=250)
+    
+    if lang == "hi":
+        headline_text = article.get("ai_title_hindi") or article.get("ai_title") or slide_headline(article, max_chars=75)
+        summary_text = article.get("ai_summary_hindi") or article.get("ai_summary") or slide_summary(article, max_chars=250)
+    else:
+        headline_text = article.get("ai_title") or slide_headline(article, max_chars=75)
+        summary_text = article.get("ai_summary") or slide_summary(article, max_chars=250)
     
     # 1. Premium dark background
     canvas = Image.new("RGB", (width, height), C["dark_bg"])
@@ -421,8 +479,8 @@ def slide2_facts(article, path):
     
     # 2. Header Tag at y=160
     tag_y = 160
-    tag_text = "KEY FACTS"
-    tag_font = F(24, True)
+    tag_text = translate_to_hindi("KEY FACTS") if lang == "hi" else "KEY FACTS"
+    tag_font = F(24, True, lang=lang)
     tb = draw.textbbox((0, 0), tag_text, font=tag_font)
     tw = tb[2] - tb[0]
     th = tb[3] - tb[1]
@@ -432,7 +490,7 @@ def slide2_facts(article, path):
     
     # 3. Slide Title (Article Headline)
     title_y = 220
-    title_font = F(46, True)
+    title_font = F(46, True, lang=lang)
     wrapped_title = textwrap.wrap(headline_text, width=38)[:2]
     for line in wrapped_title:
         draw.text((60, title_y), line, font=title_font, fill=C["white"])
@@ -452,8 +510,10 @@ def slide2_facts(article, path):
         sentences = [" ".join(words[index:index + chunk_size]) for index in range(0, len(words), chunk_size)]
         
     facts = sentences[:4]
+    handle_text = f"{PAGE_HANDLE}.hindi" if lang == "hi" else PAGE_HANDLE
     while len(facts) < 4:
-        facts.append(f"Follow {PAGE_HANDLE} for more live updates on this story.")
+        fallback_msg = f"इस खबर पर लेटेस्ट लाइव अपडेट के लिए {handle_text} को फॉलो करें।" if lang == "hi" else f"Follow {PAGE_HANDLE} for more live updates on this story."
+        facts.append(fallback_msg)
         
     # Draw facts
     fact_y = timeline_start_y + 20
@@ -474,7 +534,7 @@ def slide2_facts(article, path):
         
         # Draw number inside
         num_str = str(index)
-        num_font = F(26, True)
+        num_font = F(26, True, lang=lang)
         nb = draw.textbbox((0, 0), num_str, font=num_font)
         nw = nb[2] - nb[0]
         nh = nb[3] - nb[1]
@@ -489,7 +549,7 @@ def slide2_facts(article, path):
         )
         
         # Draw Fact Text
-        fact_font = F(34, False)
+        fact_font = F(34, False, lang=lang)
         wrapped_fact = textwrap.wrap(shorten(fact, 140), width=44)[:3]
         
         text_y = fact_y
@@ -501,8 +561,8 @@ def slide2_facts(article, path):
                 normal_part = " " + " ".join(words[2:])
                 
                 # Draw bold part
-                draw.text((144, text_y), bold_part, font=F(34, True), fill=accent_color)
-                bp_w = draw.textbbox((0, 0), bold_part, font=F(34, True))[2]
+                draw.text((144, text_y), bold_part, font=F(34, True, lang=lang), fill=accent_color)
+                bp_w = draw.textbbox((0, 0), bold_part, font=F(34, True, lang=lang))[2]
                 # Draw normal part
                 draw.text((144 + bp_w, text_y), normal_part, font=fact_font, fill=C["offwhite"])
             else:
@@ -517,25 +577,33 @@ def slide2_facts(article, path):
     
     paste_logo(canvas, 60, footer_y + 20, size=60)
     draw = ImageDraw.Draw(canvas)
-    draw.text((134, footer_y + 32), PAGE_HANDLE, font=F(32, True), fill=C["white"])
+    draw.text((134, footer_y + 32), handle_text, font=F(32, True, lang=lang), fill=C["white"])
     
-    swipe_text = "Swipe for visual breakdown →"
-    sw_w = draw.textbbox((0, 0), swipe_text, font=F(28, True))[2]
-    draw.text((width - 60 - sw_w, footer_y + 34), swipe_text, font=F(28, True), fill=accent_color)
+    swipe_text = translate_to_hindi("Swipe for visual breakdown →") if lang == "hi" else "Swipe for visual breakdown →"
+    sw_w = draw.textbbox((0, 0), swipe_text, font=F(28, True, lang=lang))[2]
+    draw.text((width - 60 - sw_w, footer_y + 34), swipe_text, font=F(28, True, lang=lang), fill=accent_color)
     
-    source_line = f"Source: {display_source(article['source'])}  |  {datetime.now().strftime('%d %b %Y')}"
-    draw.text((60, footer_y + 94), source_line.upper(), font=F(24, True), fill=(100, 105, 120))
+    source_label = "स्रोत" if lang == "hi" else "Source"
+    source_line = f"{source_label}: {display_source(article['source'])}  |  {datetime.now().strftime('%d %b %Y')}"
+    draw.text((60, footer_y + 94), source_line.upper(), font=F(24, True, lang=lang), fill=(100, 105, 120))
     
     canvas.save(path, "JPEG", quality=96)
     return path
 
 
-def slide3_visual(article, path):
+def slide3_visual(article, path, lang="en"):
     width, height = 1080, 1350
     print("    Slide 3 - VISUAL...")
-    headline_text = article.get("ai_title") or slide_headline(article, max_chars=75)
-    summary_text = article.get("ai_summary") or slide_summary(article, max_chars=150)
     
+    if lang == "hi":
+        headline_text = article.get("ai_title_hindi") or article.get("ai_title") or slide_headline(article, max_chars=75)
+        summary_text = article.get("ai_summary_hindi") or article.get("ai_summary") or slide_summary(article, max_chars=150)
+        quote_text = article.get("ai_hook_hindi") or article.get("ai_title_hindi") or article.get("ai_hook") or headline_text
+    else:
+        headline_text = article.get("ai_title") or slide_headline(article, max_chars=75)
+        summary_text = article.get("ai_summary") or slide_summary(article, max_chars=150)
+        quote_text = article.get("ai_hook") or headline_text
+        
     # 1. Base Image - full bleed
     photo = get_photo(article, width, height, seed_offset=300, fit=True)
     
@@ -570,15 +638,16 @@ def slide3_visual(article, path):
     accent_color = get_category_color(category_name)
     
     # Category Tag pill in top right
-    tag_font = F(24, True)
-    tb = draw.textbbox((0, 0), category_name, font=tag_font)
+    category_text = translate_to_hindi(category_name) if lang == "hi" else category_name
+    tag_font = F(24, True, lang=lang)
+    tb = draw.textbbox((0, 0), category_text, font=tag_font)
     tw = tb[2] - tb[0]
     th = tb[3] - tb[1]
     
     pill_x = width - tw - 80
     pill_y = 44
     draw.rounded_rectangle([pill_x, pill_y, pill_x + tw + 32, pill_y + th + 16], radius=6, fill=accent_color)
-    draw.text((pill_x + 16, pill_y + 8), category_name, font=tag_font, fill=C["white"])
+    draw.text((pill_x + 16, pill_y + 8), category_text, font=tag_font, fill=C["white"])
     
     # 4. Premium Glassmorphic Quote Card (y=620)
     card_y = 660
@@ -586,11 +655,10 @@ def slide3_visual(article, path):
     card_x2 = width - 60
     
     # Let's wrap quote first to calculate height dynamically
-    quote_text = article.get("ai_hook") or headline_text
     if not quote_text.startswith('"'):
         quote_text = f'"{quote_text}"'
         
-    quote_font = F(56, True)
+    quote_font = F(56, True, lang=lang)
     wrapped_quote = textwrap.wrap(quote_text, width=32)[:3]
     
     card_h = 40 + len(wrapped_quote) * 66 + 60 # padding + text + citation space
@@ -609,15 +677,16 @@ def slide3_visual(article, path):
         qy += 66
         
     # Draw Source Citation inside the card bottom right
-    source_text = f"— SOURCE: {display_source(article['source']).upper()}"
-    source_font = F(24, True)
+    source_label = "स्रोत" if lang == "hi" else "SOURCE"
+    source_text = f"— {source_label}: {display_source(article['source']).upper()}"
+    source_font = F(24, True, lang=lang)
     sb = draw.textbbox((0, 0), source_text, font=source_font)
     sw = sb[2] - sb[0]
     draw.text((card_x2 - sw - 30, qy + 10), source_text, font=source_font, fill=accent_color)
     
     # 5. Summary Text below Quote Card
     summary_y = card_y2 + 40
-    summary_font = F(34, False)
+    summary_font = F(34, False, lang=lang)
     wrapped_summary = textwrap.wrap(summary_text, width=50)[:3]
     
     for line in wrapped_summary:
@@ -631,20 +700,21 @@ def slide3_visual(article, path):
     
     paste_logo(canvas, 60, footer_y + 20, size=60)
     draw = ImageDraw.Draw(canvas)
-    draw.text((134, footer_y + 32), PAGE_HANDLE, font=F(32, True), fill=C["white"])
+    handle_text = f"{PAGE_HANDLE}.hindi" if lang == "hi" else PAGE_HANDLE
+    draw.text((134, footer_y + 32), handle_text, font=F(32, True, lang=lang), fill=C["white"])
     
-    save_text = "Save this post for later"
-    sv_w = draw.textbbox((0, 0), save_text, font=F(28, True))[2]
-    draw.text((width - 60 - sv_w, footer_y + 34), save_text, font=F(28, True), fill=accent_color)
+    save_text = translate_to_hindi("Save this post for later") if lang == "hi" else "Save this post for later"
+    sv_w = draw.textbbox((0, 0), save_text, font=F(28, True, lang=lang))[2]
+    draw.text((width - 60 - sv_w, footer_y + 34), save_text, font=F(28, True, lang=lang), fill=accent_color)
     
-    source_line = f"NEWS FLASH 5  |  VERIFIED & FACTUAL UPDATES"
-    draw.text((60, footer_y + 94), source_line.upper(), font=F(24, True), fill=(100, 105, 120))
+    footer_title = "न्यूज़ फ़्लैश 5  |  सटीक एवं निष्पक्ष विश्लेषण" if lang == "hi" else "NEWS FLASH 5  |  VERIFIED & FACTUAL UPDATES"
+    draw.text((60, footer_y + 94), footer_title, font=F(24, True, lang=lang), fill=(100, 105, 120))
     
     canvas.save(path, "JPEG", quality=96)
     return path
 
 
-def slide4_cta(article, path):
+def slide4_cta(article, path, lang="en"):
     width, height = 1080, 1350
     print("    Slide 4 - CTA...")
     
@@ -687,11 +757,13 @@ def slide4_cta(article, path):
     
     # 3. Brand Header Title
     title_y = 520
-    brand_font = F(72, True)
-    center_x(draw, title_y, "NEWS FLASH 5", brand_font, C["white"], width)
+    brand_name = "न्यूज़ फ़्लैश 5" if lang == "hi" else "NEWS FLASH 5"
+    brand_font = F(72, True, lang=lang)
+    center_x(draw, title_y, brand_name, brand_font, C["white"], width)
     
-    handle_font = F(38, True)
-    center_x(draw, title_y + 80, PAGE_HANDLE, handle_font, accent_color, width)
+    handle_text = f"{PAGE_HANDLE}.hindi" if lang == "hi" else PAGE_HANDLE
+    handle_font = F(38, True, lang=lang)
+    center_x(draw, title_y + 80, handle_text, handle_font, accent_color, width)
     
     # 4. Premium CTA Card
     card_x1 = 100
@@ -703,12 +775,15 @@ def slide4_cta(article, path):
     
     # CTA Card Content
     card_draw_y = card_y1 + 40
-    center_x(draw, card_draw_y, "YOUR DAILY PORTAL FOR INSTANT GLOBAL NEWS", F(28, True), (140, 145, 160), width)
+    card_header = "हर घंटे देश और दुनिया की ताज़ा खबरें" if lang == "hi" else "YOUR DAILY PORTAL FOR INSTANT GLOBAL NEWS"
+    center_x(draw, card_draw_y, card_header, F(28, True, lang=lang), (140, 145, 160), width)
     
     # Follow instruction text
     card_draw_y += 64
-    center_x(draw, card_draw_y, "Follow for hourly updates, visual breakdowns", F(34, False), C["offwhite"], width)
-    center_x(draw, card_draw_y + 42, "and verified breaking news alerts.", F(34, False), C["offwhite"], width)
+    line1 = "हर घंटे की ताज़ा अपडेट और विश्लेषण के लिए" if lang == "hi" else "Follow for hourly updates, visual breakdowns"
+    line2 = "पेज को आज ही फॉलो करें।" if lang == "hi" else "and verified breaking news alerts."
+    center_x(draw, card_draw_y, line1, F(34, False, lang=lang), C["offwhite"], width)
+    center_x(draw, card_draw_y + 42, line2, F(34, False, lang=lang), C["offwhite"], width)
     
     # Turn on notifications button
     btn_w = 560
@@ -718,8 +793,8 @@ def slide4_cta(article, path):
     
     draw.rounded_rectangle([btn_x, btn_y, btn_x + btn_w, btn_y + btn_h], radius=38, fill=accent_color)
     
-    btn_text = "TURN ON NOTIFICATIONS"
-    btn_font = F(30, True)
+    btn_text = "नोटिफिकेशन ऑन करें" if lang == "hi" else "TURN ON NOTIFICATIONS"
+    btn_font = F(30, True, lang=lang)
     bt_b = draw.textbbox((0, 0), btn_text, font=btn_font)
     bt_w = bt_b[2] - bt_b[0]
     bt_h = bt_b[3] - bt_b[1]
@@ -728,20 +803,20 @@ def slide4_cta(article, path):
     
     # Spacing and multi-platform links
     platform_y = btn_y + 120
-    center_x(draw, platform_y, "INSTAGRAM  |  TELEGRAM  |  WHATSAPP  |  YOUTUBE", F(26, True), (120, 125, 140), width)
+    center_x(draw, platform_y, "INSTAGRAM  |  TELEGRAM  |  WHATSAPP  |  YOUTUBE", F(26, True, lang=lang), (120, 125, 140), width)
     
     # 5. Footer Copyright
     footer_y = 1220
     draw.line([(100, footer_y), (width - 100, footer_y)], fill=(45, 48, 65), width=2)
     
-    copyright_text = "© NEWS FLASH 5. ALL RIGHTS RESERVED."
-    center_x(draw, footer_y + 36, copyright_text, F(24, True), (90, 95, 110), width)
+    copyright_text = "© न्यूज़ फ़्लैश 5. सर्वाधिकार सुरक्षित।" if lang == "hi" else "© NEWS FLASH 5. ALL RIGHTS RESERVED."
+    center_x(draw, footer_y + 36, copyright_text, F(24, True, lang=lang), (90, 95, 110), width)
     
     canvas.save(path, "JPEG", quality=96)
     return path
 
 
-def digest_cover_slide(articles, path):
+def digest_cover_slide(articles, path, lang="en"):
     width, height = 1080, 1350
     print("    Slide 1 - DIGEST COVER...")
     
@@ -781,17 +856,18 @@ def digest_cover_slide(articles, path):
     badge_y = 50
     # Red Top Half
     draw.rectangle([badge_x, badge_y, badge_x + 220, badge_y + 45], fill=C["red"])
-    t1 = "BREAKING"
-    w1 = draw.textbbox((0,0), t1, font=F(28, True))[2]
-    draw.text((badge_x + (220 - w1)//2, badge_y + 5), t1, font=F(28, True), fill=C["white"])
+    t1 = "ब्रेकिंग" if lang == "hi" else "BREAKING"
+    w1 = draw.textbbox((0,0), t1, font=F(28, True, lang=lang))[2]
+    draw.text((badge_x + (220 - w1)//2, badge_y + 5), t1, font=F(28, True, lang=lang), fill=C["white"])
     # White Bottom Half
     draw.rectangle([badge_x, badge_y + 45, badge_x + 220, badge_y + 90], fill=C["white"])
-    t2 = "NEWS"
-    w2 = draw.textbbox((0,0), t2, font=F(36, True))[2]
-    draw.text((badge_x + (220 - w2)//2, badge_y + 45), t2, font=F(36, True), fill=(0, 0, 0))
+    t2 = "न्यूज़" if lang == "hi" else "NEWS"
+    w2 = draw.textbbox((0,0), t2, font=F(36, True, lang=lang))[2]
+    draw.text((badge_x + (220 - w2)//2, badge_y + 45), t2, font=F(36, True, lang=lang), fill=(0, 0, 0))
     # Live Pill
     draw.rounded_rectangle([badge_x + 130, badge_y + 100, badge_x + 220, badge_y + 135], radius=15, fill=C["red"])
-    draw.text((badge_x + 145, badge_y + 102), "• LIVE", font=F(22, True), fill=C["white"])
+    live_label = "• लाइव" if lang == "hi" else "• LIVE"
+    draw.text((badge_x + 145, badge_y + 102), live_label, font=F(22, True, lang=lang), fill=C["white"])
 
     # Font Awesome Setup
     fa_font = ImageFont.truetype("assets/fa-solid-900.ttf", 45)
@@ -799,14 +875,16 @@ def digest_cover_slide(articles, path):
     # Draw massive centered text: "5 BIG STORIES IN 60 SECONDS"
     title_y = 200
     
-    font_5 = F(480, True, impact=True)
+    font_5 = F(480, True, impact=True, lang=lang)
     w5 = draw.textbbox((0,0), "5", font=font_5)[2]
     
-    font_big = F(140, True, impact=True)
-    w_big = draw.textbbox((0,0), "BIG", font=font_big)[2]
+    big_text = "बड़ी" if lang == "hi" else "BIG"
+    font_big = F(140, True, impact=True, lang=lang)
+    w_big = draw.textbbox((0,0), big_text, font=font_big)[2]
     
-    font_stories = F(140, True, impact=True)
-    w_stories = draw.textbbox((0,0), "STORIES", font=font_stories)[2]
+    stories_text = "खबरें" if lang == "hi" else "STORIES"
+    font_stories = F(140, True, impact=True, lang=lang)
+    w_stories = draw.textbbox((0,0), stories_text, font=font_stories)[2]
     
     gap = 20
     motion_w = 160
@@ -818,10 +896,10 @@ def digest_cover_slide(articles, path):
     
     # Draw "BIG"
     right_x = start_x + w5 + gap
-    draw.text((right_x, title_y + 40), "BIG", font=font_big, fill=C["white"])
+    draw.text((right_x, title_y + 40), big_text, font=font_big, fill=C["white"])
     
     # Draw "STORIES"
-    draw.text((right_x, title_y + 170), "STORIES", font=font_stories, fill=accent_color)
+    draw.text((right_x, title_y + 170), stories_text, font=font_stories, fill=accent_color)
     
     # Motion lines extending from STORIES
     line_x = right_x + w_stories + 40
@@ -845,34 +923,39 @@ def digest_cover_slide(articles, path):
         (block_x, block_y + block_h)
     ], fill=C["red"])
     
-    font_60 = F(70, True, impact=True)
-    # Text inside block
-    draw.text((block_x + 60, block_y + 10), "IN", font=font_60, fill=C["white"])
-    draw.text((block_x + 135, block_y + 10), "60", font=font_60, fill=accent_color)
-    draw.text((block_x + 235, block_y + 10), "SECONDS", font=font_60, fill=C["white"])
+    font_60 = F(70, True, impact=True, lang=lang)
+    # Text inside block (order changes for clean Hindi grammar)
+    if lang == "hi":
+        draw.text((block_x + 100, block_y + 10), "60", font=font_60, fill=accent_color)
+        draw.text((block_x + 195, block_y + 10), "सेकंड", font=font_60, fill=C["white"])
+        draw.text((block_x + 395, block_y + 10), "में", font=font_60, fill=C["white"])
+    else:
+        draw.text((block_x + 60, block_y + 10), "IN", font=font_60, fill=C["white"])
+        draw.text((block_x + 135, block_y + 10), "60", font=font_60, fill=accent_color)
+        draw.text((block_x + 235, block_y + 10), "SECONDS", font=font_60, fill=C["white"])
     
     # Divider: FAST . FACTUAL . ESSENTIAL
     div_y = block_y + 130
     
-    font_div = F(32, True)
-    w_fast = draw.textbbox((0,0), "FAST", font=font_div)[2]
-    w_factual = draw.textbbox((0,0), "FACTUAL", font=font_div)[2]
-    w_essential = draw.textbbox((0,0), "ESSENTIAL", font=font_div)[2]
+    font_div = F(32, True, lang=lang)
+    w_fast = draw.textbbox((0,0), "तेज़" if lang == "hi" else "FAST", font=font_div)[2]
+    w_factual = draw.textbbox((0,0), "सटीक" if lang == "hi" else "FACTUAL", font=font_div)[2]
+    w_essential = draw.textbbox((0,0), "ज़रूरी" if lang == "hi" else "ESSENTIAL", font=font_div)[2]
     w_dot = draw.textbbox((0,0), ".", font=font_div)[2]
     gap_div = 20
     
     total_div_w = w_fast + gap_div + w_dot + gap_div + w_factual + gap_div + w_dot + gap_div + w_essential
     dx = (width - total_div_w) // 2
     
-    draw.text((dx, div_y), "FAST", font=font_div, fill=C["white"])
+    draw.text((dx, div_y), "तेज़" if lang == "hi" else "FAST", font=font_div, fill=C["white"])
     dx += w_fast + gap_div
     draw.text((dx, div_y - 6), ".", font=font_div, fill=C["red"])
     dx += w_dot + gap_div
-    draw.text((dx, div_y), "FACTUAL", font=font_div, fill=C["white"])
+    draw.text((dx, div_y), "सटीक" if lang == "hi" else "FACTUAL", font=font_div, fill=C["white"])
     dx += w_factual + gap_div
     draw.text((dx, div_y - 6), ".", font=font_div, fill=C["red"])
     dx += w_dot + gap_div
-    draw.text((dx, div_y), "ESSENTIAL", font=font_div, fill=C["white"])
+    draw.text((dx, div_y), "ज़रूरी" if lang == "hi" else "ESSENTIAL", font=font_div, fill=C["white"])
     
     # Draw exact lines
     draw.line([((width - total_div_w)//2 - 120, div_y + 20), ((width - total_div_w)//2 - 20, div_y + 20)], fill=C["white"], width=3)
@@ -883,7 +966,10 @@ def digest_cover_slide(articles, path):
     circle_r = 45
     spacing = 180
     start_x = width//2 - int(2 * spacing)
-    labels = ["GLOBAL\nUPDATES", "POLITICS &\nGOVERNANCE", "ECONOMY\nIN FOCUS", "PEOPLE &\nSOCIETY", "MORE STORIES\nINSIDE"]
+    if lang == "hi":
+        labels = ["वैश्विक\nखबरें", "राजनीति\nऔर शासन", "देश की\nअर्थव्यवस्था", "लोग और\nसमाज", "अन्य मुख्य\nखबरें"]
+    else:
+        labels = ["GLOBAL\nUPDATES", "POLITICS &\nGOVERNANCE", "ECONOMY\nIN FOCUS", "PEOPLE &\nSOCIETY", "MORE STORIES\nINSIDE"]
     icons = ["\uf0ac", "\uf19c", "\uf201", "\uf0c0", "\uf0a1"]
     
     for i in range(5):
@@ -900,8 +986,8 @@ def digest_cover_slide(articles, path):
             
         lines = labels[i].split('\n')
         for idx, lbl_line in enumerate(lines):
-            lw = draw.textbbox((0,0), lbl_line, font=F(18, True))[2]
-            draw.text((cx - lw//2, circle_y + 105 + idx*22), lbl_line, font=F(18, True), fill=C["white"])
+            lw = draw.textbbox((0,0), lbl_line, font=F(18, True, lang=lang))[2]
+            draw.text((cx - lw//2, circle_y + 105 + idx*22), lbl_line, font=F(18, True, lang=lang), fill=C["white"])
             
     # Engagement Hook Block: WAIT TILL YOU SEE...
     hook_y = circle_y + 180
@@ -915,10 +1001,10 @@ def digest_cover_slide(articles, path):
     fa_clock_font = ImageFont.truetype("assets/fa-solid-900.ttf", 60)
     draw.text((hook_x + 40, hook_y + 20), fa_clock, font=fa_clock_font, fill=accent_color)
     
-    hook_text_1 = "WAIT TILL YOU SEE"
-    hook_text_2 = "THE LAST ONE..."
-    font_h1 = F(32, True)
-    font_h2 = F(36, True, impact=True)
+    hook_text_1 = translate_to_hindi("WAIT TILL YOU SEE") if lang == "hi" else "WAIT TILL YOU SEE"
+    hook_text_2 = translate_to_hindi("THE LAST ONE...") if lang == "hi" else "THE LAST ONE..."
+    font_h1 = F(32, True, lang=lang)
+    font_h2 = F(36, True, impact=True, lang=lang)
     draw.text((hook_x + 130, hook_y + 15), hook_text_1, font=font_h1, fill=C["white"])
     draw.text((hook_x + 130, hook_y + 50), hook_text_2, font=font_h2, fill=accent_color)
     
@@ -929,23 +1015,24 @@ def digest_cover_slide(articles, path):
     footer_y = 1170
     date_str = datetime.now().strftime('%d %b %Y   |   %H:%M')
     fa_cal = "\uf133"
-    cal_w = draw.textbbox((0,0), fa_cal, font=F(24, True))[2]
-    footer_text = f"UPDATED: {date_str.upper()}"
-    ft_w = draw.textbbox((0,0), footer_text, font=F(24, True))[2]
+    cal_w = draw.textbbox((0,0), fa_cal, font=F(24, True, lang=lang))[2]
+    footer_label = "अपडेटेड" if lang == "hi" else "UPDATED"
+    footer_text = f"{footer_label}: {date_str.upper()}"
+    ft_w = draw.textbbox((0,0), footer_text, font=F(24, True, lang=lang))[2]
     total_w = cal_w + 10 + ft_w
     fx = (width - total_w) // 2
     
     fa_small = ImageFont.truetype("assets/fa-solid-900.ttf", 24)
     draw.text((fx, footer_y), fa_cal, font=fa_small, fill=C["red"])
-    draw.text((fx + cal_w + 10, footer_y), footer_text, font=F(24, True), fill=(200, 200, 200))
+    draw.text((fx + cal_w + 10, footer_y), footer_text, font=F(24, True, lang=lang), fill=(200, 200, 200))
     
     # Premium Swipe Button (Bottom CTA)
     btn_w, btn_h = 600, 75
     btn_x, btn_y = (width - btn_w) // 2, 1220
     draw.rounded_rectangle([btn_x, btn_y, btn_x + btn_w, btn_y + btn_h], radius=40, fill=accent_color)
     
-    btn_text = "WATCH FULL BREAKDOWN"
-    btn_font = F(32, True)
+    btn_text = translate_to_hindi("WATCH FULL BREAKDOWN") if lang == "hi" else "WATCH FULL BREAKDOWN"
+    btn_font = F(32, True, lang=lang)
     text_w = draw.textbbox((0,0), btn_text, font=btn_font)[2]
     btn_content_w = text_w + 20 + draw.textbbox((0,0), fa_angles, font=btn_font)[2]
     bx = btn_x + (btn_w - btn_content_w) // 2
@@ -960,12 +1047,26 @@ def digest_cover_slide(articles, path):
     return path
 
 
-def digest_story_slide(article, path, index, total):
+def digest_story_slide(article, path, index, total, lang="en"):
     width, height = 1080, 1350
-    print(f"    Slide {index + 1} - DIGEST STORY...")
-    headline_text = article.get("ai_title") or slide_headline(article, max_chars=120)
-    summary_text = article.get("ai_summary") or slide_summary(article, max_chars=350)
-    label_text = story_label(article)
+    print(f"    Slide {index + 1} - DIGEST STORY ({lang.upper()})...")
+    
+    if lang == "hi":
+        headline_text = article.get("ai_title_hindi") or article.get("ai_title") or slide_headline(article, max_chars=120)
+        summary_text = article.get("ai_summary_hindi") or article.get("ai_summary") or slide_summary(article, max_chars=350)
+        label_text = translate_to_hindi(story_label(article))
+        handle_text = f"{PAGE_HANDLE}.hindi"
+        swipe_text = translate_to_hindi("Swipe for next update →") if index < total else "खबरें समाप्त"
+        source_label = "स्रोत"
+        highlights_label = "मुख्य झलकियां"
+    else:
+        headline_text = article.get("ai_title") or slide_headline(article, max_chars=120)
+        summary_text = article.get("ai_summary") or slide_summary(article, max_chars=350)
+        label_text = story_label(article)
+        handle_text = PAGE_HANDLE
+        swipe_text = "Swipe for next update →" if index < total else "End of Hourly Digest"
+        source_label = "Source"
+        highlights_label = "KEY HIGHLIGHTS"
     
     # Base Image (Zoomed to perfectly fill the vertical canvas)
     base_img = get_photo(article, width, height, seed_offset=200 + index * 70, fit=True)
@@ -1004,17 +1105,18 @@ def digest_story_slide(article, path, index, total):
     # Date & Category Pill
     pill_y = 160
     date_str = article.get("ai_date") or datetime.now().strftime('%d %b %Y')
-    draw.text((60, pill_y + 5), date_str.upper(), font=F(28, False), fill=C["offwhite"])
+    draw.text((60, pill_y + 5), date_str.upper(), font=F(28, False, lang=lang), fill=C["offwhite"])
     draw.line([(240, pill_y), (240, pill_y + 40)], fill=(100, 100, 100), width=2)
     
-    cat_w = draw.textbbox((0, 0), category_name, font=F(28, True))[2]
+    display_category = translate_to_hindi(category_name) if lang == "hi" else category_name
+    cat_w = draw.textbbox((0, 0), display_category, font=F(28, True, lang=lang))[2]
     draw.rounded_rectangle([260, pill_y, 260 + cat_w + 30, pill_y + 40], radius=8, fill=accent_color)
-    draw.text((275, pill_y + 5), category_name, font=F(28, True), fill=C["white"])
+    draw.text((275, pill_y + 5), display_category, font=F(28, True, lang=lang), fill=C["white"])
     
     # Huge Left-Aligned Headline (Mixed case is much more premium!)
     title_y = 230
-    title_font = F(72, True)
-    title_font_sm = F(54, True)
+    title_font = F(72, True, lang=lang)
+    title_font_sm = F(54, True, lang=lang)
     
     # Split headline if it has an accent divider
     full_headline = headline_text
@@ -1078,11 +1180,15 @@ def digest_story_slide(article, path, index, total):
     
     if article.get("ai_rewritten"):
         intro_text = summary_text
-        bullets = article.get("ai_highlights", [])[:3]
+        if lang == "hi":
+            bullets = article.get("ai_highlights_hindi", [])[:3] or article.get("ai_highlights", [])[:3]
+        else:
+            bullets = article.get("ai_highlights", [])[:3]
     else:
-        sentences = [s.strip() for s in re.split(r'[.!?]', summary_text) if len(s.strip()) > 15]
+        # Split using Devanagari danda also
+        sentences = [s.strip() for s in re.split(r'[.!?।]', summary_text) if len(s.strip()) > 15]
         if len(sentences) > 1:
-            intro_text = sentences[0] + "."
+            intro_text = sentences[0] + ("।" if lang == "hi" else ".")
             bullets = sentences[1:4]
         else:
             clauses = [c.strip() for c in re.split(r'[,;]\s+', summary_text) if len(c.strip()) > 15]
@@ -1090,7 +1196,7 @@ def digest_story_slide(article, path, index, total):
                 intro_text = clauses[0] + ","
                 bullets = clauses[1:4]
             else:
-                intro_text = "Latest developments on this story:"
+                intro_text = "ताज़ा जानकारी:" if lang == "hi" else "Latest developments on this story:"
                 bullets = [summary_text]
                 
     summary_lines = textwrap.wrap(intro_text, width=44)[:4]
@@ -1100,8 +1206,8 @@ def digest_story_slide(article, path, index, total):
     summary_panel_draw = ImageDraw.Draw(summary_panel_layer)
     _sy = summary_y
     for line in summary_lines:
-        lw = draw.textbbox((0, 0), line, font=F(36, False))[2]
-        lh = draw.textbbox((0, 0), line, font=F(36, False))[3]
+        lw = draw.textbbox((0, 0), line, font=F(36, False, lang=lang))[2]
+        lh = draw.textbbox((0, 0), line, font=F(36, False, lang=lang))[3]
         summary_panel_draw.rounded_rectangle([50, _sy - 4, 50 + lw + 24, _sy + lh + 4], radius=6, fill=(10, 11, 16, 130))
         _sy += lh + 12
     canvas = Image.alpha_composite(canvas.convert("RGBA"), summary_panel_layer).convert("RGB")
@@ -1110,9 +1216,9 @@ def digest_story_slide(article, path, index, total):
     # Draw summary text
     _sy = summary_y
     for line in summary_lines:
-        draw.text((61, _sy + 1), line, font=F(36, False), fill=(0, 0, 0))
-        draw.text((60, _sy), line, font=F(36, False), fill=C["offwhite"])
-        _sy += draw.textbbox((0, 0), line, font=F(36, False))[3] + 12
+        draw.text((61, _sy + 1), line, font=F(36, False, lang=lang), fill=(0, 0, 0))
+        draw.text((60, _sy), line, font=F(36, False, lang=lang), fill=C["offwhite"])
+        _sy += draw.textbbox((0, 0), line, font=F(36, False, lang=lang))[3] + 12
         
     # 8. Key Highlights Box (Premium and dynamic)
     summary_y = _sy + 30
@@ -1131,15 +1237,16 @@ def digest_story_slide(article, path, index, total):
     draw.rounded_rectangle([60, summary_y, 60 + box_w, summary_y + box_h], radius=16, fill=(15, 17, 26, 190), outline=(45, 48, 65), width=2)
     
     # Highlights label tag pill
-    draw.rounded_rectangle([60, summary_y, 60 + 280, summary_y + 50], radius=12, fill=accent_color)
-    draw.text((80, summary_y + 10), "KEY HIGHLIGHTS", font=F(26, True), fill=C["white"])
+    hl_w = draw.textbbox((0, 0), highlights_label, font=F(26, True, lang=lang))[2]
+    draw.rounded_rectangle([60, summary_y, 60 + hl_w + 40, summary_y + 50], radius=12, fill=accent_color)
+    draw.text((80, summary_y + 10), highlights_label, font=F(26, True, lang=lang), fill=C["white"])
     
     bullet_y = summary_y + 76
     for idx, wrapped_b in enumerate(wrapped_bullets_list):
         # Bullet dot in accent color
         draw.ellipse([85, bullet_y + 12, 97, bullet_y + 24], fill=accent_color)
         for line in wrapped_b:
-            draw.text((120, bullet_y), line, font=F(32, False), fill=C["offwhite"])
+            draw.text((120, bullet_y), line, font=F(32, False, lang=lang), fill=C["offwhite"])
             bullet_y += 42
         if idx < len(bullets) - 1:
             draw.line([(80, bullet_y + 8), (60 + box_w - 30, bullet_y + 8)], fill=(45, 48, 65), width=2)
@@ -1151,58 +1258,58 @@ def digest_story_slide(article, path, index, total):
     
     paste_logo(canvas, 60, footer_y + 20, size=60)
     draw = ImageDraw.Draw(canvas)
-    draw.text((134, footer_y + 32), PAGE_HANDLE, font=F(32, True), fill=C["white"])
+    draw.text((134, footer_y + 32), handle_text, font=F(32, True, lang=lang), fill=C["white"])
     
-    swipe_text = "Swipe for next update →" if index < total else "End of Hourly Digest"
-    sw_w = draw.textbbox((0, 0), swipe_text, font=F(28, True))[2]
-    draw.text((width - 60 - sw_w, footer_y + 34), swipe_text, font=F(28, True), fill=accent_color)
+    swipe_text = translate_to_hindi("Swipe for next update →") if index < total else ("खबरें समाप्त" if lang == "hi" else "End of Hourly Digest")
+    sw_w = draw.textbbox((0, 0), swipe_text, font=F(28, True, lang=lang))[2]
+    draw.text((width - 60 - sw_w, footer_y + 34), swipe_text, font=F(28, True, lang=lang), fill=accent_color)
     
-    source_line = f"Source: {display_source(article['source'])}  |  Slide {index} of {total}"
-    draw.text((60, footer_y + 94), source_line.upper(), font=F(24, True), fill=(100, 105, 120))
+    source_line = f"{source_label}: {display_source(article['source'])}  |  Slide {index} of {total}"
+    draw.text((60, footer_y + 94), source_line.upper(), font=F(24, True, lang=lang), fill=(100, 105, 120))
     
     canvas.save(path, "JPEG", quality=96)
     return path
 
 
-def create_carousel(article, prefix=None):
+def create_carousel(article, prefix=None, lang="en"):
     timestamp = datetime.now().strftime("%H%M%S%f")[:10]
     prefix = prefix or f"{article['category'].lower()}_{timestamp}"
-    print(f"\n  Story carousel: {article['title'][:55]}...")
+    print(f"\n  Story carousel: {article['title'][:55]}... ({lang.upper()})")
     paths = [
         OUTPUT_DIR / f"{prefix}_1_main.jpg",
         OUTPUT_DIR / f"{prefix}_2_facts.jpg",
         OUTPUT_DIR / f"{prefix}_3_visual.jpg",
         OUTPUT_DIR / f"{prefix}_4_cta.jpg",
     ]
-    slide1_main(article, str(paths[0]))
-    slide2_facts(article, str(paths[1]))
-    slide3_visual(article, str(paths[2]))
-    slide4_cta(article, str(paths[3]))
+    slide1_main(article, str(paths[0]), lang=lang)
+    slide2_facts(article, str(paths[1]), lang=lang)
+    slide3_visual(article, str(paths[2]), lang=lang)
+    slide4_cta(article, str(paths[3]), lang=lang)
     print("  4 slides saved")
     return [str(path) for path in paths]
 
 
-def create_single(article, prefix=None):
+def create_single(article, prefix=None, lang="en"):
     timestamp = datetime.now().strftime("%H%M%S%f")[:10]
     prefix = prefix or f"{article['category'].lower()}_{timestamp}"
     path = OUTPUT_DIR / f"{prefix}_breaking.jpg"
-    print(f"\n  Single post: {article['title'][:55]}...")
-    slide1_main(article, str(path))
+    print(f"\n  Single post: {article['title'][:55]}... ({lang.upper()})")
+    slide1_main(article, str(path), lang=lang)
     print("  Saved")
     return str(path)
 
 
-def create_digest_carousel(articles, prefix=None):
+def create_digest_carousel(articles, prefix=None, lang="en"):
     timestamp = datetime.now().strftime("%H%M%S%f")[:10]
     prefix = prefix or f"digest_{timestamp}"
-    print(f"\n  Hourly digest carousel with {len(articles)} stories")
+    print(f"\n  Hourly digest carousel with {len(articles)} stories ({lang.upper()})")
     paths = [OUTPUT_DIR / f"{prefix}_1_cover.jpg"]
     for index in range(len(articles)):
         paths.append(OUTPUT_DIR / f"{prefix}_{index + 2}_story.jpg")
 
-    digest_cover_slide(articles, str(paths[0]))
+    digest_cover_slide(articles, str(paths[0]), lang=lang)
     for index, article in enumerate(articles, start=1):
-        digest_story_slide(article, str(paths[index]), index, len(articles))
+        digest_story_slide(article, str(paths[index]), index, len(articles), lang=lang)
 
     print(f"  {len(paths)} digest slides saved")
     return [str(path) for path in paths]
