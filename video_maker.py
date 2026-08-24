@@ -26,7 +26,12 @@ INTRO_POOL_EN = [
     "Hold on, before you scroll — here are the top 5 updates breaking the internet right now.",
     "Stop scrolling! Here is the biggest news roundup you need to hear today.",
     "Here are the five key stories you shouldn't miss right now.",
-    "Let's check out the top updates making headlines across the world today."
+    "Let's check out the top updates making headlines across the world today.",
+    "Top 5 major headlines just dropped — here's what you need to know.",
+    "Big news breaking this hour! Here's your quick 60-second roundup.",
+    "Before your day continues, catch up on these 5 essential global headlines.",
+    "From major world events to key regional updates — here are the top 5 stories.",
+    "Here is your official hourly news briefing in 60 seconds."
 ]
 
 INTRO_POOL_HI = [
@@ -34,7 +39,10 @@ INTRO_POOL_HI = [
     "स्क्रॉल करने से पहले रुकिए — यहाँ हैं आज की 5 सबसे महत्वपूर्ण खबरें।",
     "खबरदार! आज दुनिया भर में क्या बड़ा हुआ, चलिए 60 सेकंड में जानते हैं।",
     "आज की 5 बड़ी खबरें जो आपको जाननी बेहद ज़रूरी हैं।",
-    "नमस्कार, न्यूज़ फ़्लैश फाइव में आपका स्वागत है। चलिए शुरू करते हैं।"
+    "नमस्कार, न्यूज़ फ़्लैश फाइव में आपका स्वागत है। चलिए शुरू करते हैं।",
+    "इस घंटे की 5 सबसे बड़ी हेडलाइंस जो आपको चौंका सकती हैं।",
+    "देश और दुनिया की 5 बड़ी घटनाएं — देखिए केवल 60 सेकंड में।",
+    "आज की सबसे अहम खबरें जो हर भारतीय को पता होनी चाहिए।"
 ]
 
 OUTRO_POOL_EN = [
@@ -42,14 +50,17 @@ OUTRO_POOL_EN = [
     " What is your take on today's headlines? Comment your opinion right now!",
     " Don't forget to like, comment your thoughts, and follow News Flash 5 for daily updates.",
     " Which update do you think will impact you the most? Let us know below!",
-    " Keep yourself ahead of the news — follow @news.flash5 for more."
+    " Keep yourself ahead of the news — follow @news.flash5 for more.",
+    " Which headline matters most to you? Share your perspective in the comments!",
+    " Stay informed every hour — subscribe to News Flash 5 right now!"
 ]
 
 OUTRO_POOL_HI = [
     " इनमें से किस खबर ने आपको सबसे ज्यादा हैरान किया? कमेंट सेक्शन में अपनी राय ज़रूर दें!",
     " आज की इन बड़ी खबरों पर आपकी क्या राय है? कमेंट में बताएं और न्यूज़ फ़्लैश 5 को फॉलो करें!",
     " आपकी इस बारे में क्या सोच है? कमेंट करके हमें बताइए और चैनल को सब्सक्राइब करें!",
-    " अगले बड़े अपडेट के लिए न्यूज़ फ़्लैश 5 को फॉलो करना न भूलें।"
+    " अगले बड़े अपडेट के लिए न्यूज़ फ़्लैश 5 को फॉलो करना न भूलें।",
+    " देश की राजनीति से लेकर व्यापार तक — अपनी राय कमेंट्स में ज़रूर साझा करें!"
 ]
 
 MUSIC_HEADERS = {
@@ -289,7 +300,11 @@ async def generate_voiceover(text, output_audio_path, lang="en"):
         else:
             voice = VOICE_EN
             
-        communicate = edge_tts.Communicate(clean_text, voice, rate=VOICE_RATE, pitch=VOICE_PITCH)
+        # Voice micro-jitter pitch & rate randomization for unique audio fingerprint per news story
+        import random
+        rate_jitter = random.choice(["-2%", "-1%", "-1%", "+0%"])
+        pitch_jitter = random.choice(["-2Hz", "-1Hz", "-1Hz", "+0Hz"])
+        communicate = edge_tts.Communicate(clean_text, voice, rate=rate_jitter, pitch=pitch_jitter)
         submaker = edge_tts.SubMaker()
         
         async def _stream_tts():
