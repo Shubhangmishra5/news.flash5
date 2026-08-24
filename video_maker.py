@@ -208,6 +208,25 @@ def overlay_subtitles(video_clip, srt_content):
     return video_clip.transform(lambda gf, t: add_subtitles_to_frame(gf(t), t))
 
 
+def overlay_progress_bar(video_clip, height=8, color=(230, 30, 45)):
+    """Draw a thin, sleek animated progress bar across the top of the video canvas."""
+    total_duration = video_clip.duration
+    def add_bar_to_frame(frame, t):
+        if total_duration <= 0:
+            return frame
+        progress = min(max(t / total_duration, 0.0), 1.0)
+        img = Image.fromarray(frame)
+        draw = ImageDraw.Draw(img)
+        w, h = img.size
+        bar_w = int(progress * w)
+        if bar_w > 0:
+            draw.rectangle([0, 0, bar_w, height], fill=color)
+            draw.rectangle([0, height, bar_w, height + 2], fill=(180, 20, 35))
+        return np.array(img)
+
+    return video_clip.transform(lambda gf, t: add_bar_to_frame(gf(t), t))
+
+
 def _generate_mock_srt(text, audio_path):
     """Generate simple word-timed SRT subtitles based on audio duration for fallback TTS."""
     try:
@@ -555,8 +574,12 @@ def create_digest_reel(articles, image_paths, lang="en"):
         audio = AudioFileClip(audio_path)
         img_clip = ImageClip(image_paths[i+1]).with_duration(audio.duration).with_audio(audio)
         
-        # Apply Ken Burns Zoom & Subtitles to this slide
-        img_clip = img_clip.resized(lambda t: 1.0 + (0.06 * (t / audio.duration)))
+        # Apply alternating Ken Burns Zoom & Subtitles to this slide for unique motion signature
+        if i % 2 == 0:
+            img_clip = img_clip.resized(lambda t: 1.0 + (0.06 * (t / audio.duration)))
+        else:
+            img_clip = img_clip.resized(lambda t: 1.06 - (0.06 * (t / audio.duration)))
+            
         img_clip = overlay_subtitles(img_clip, story_srt)
         
         # Smooth crossfade transition between news slides (MoviePy 2.0 style)
@@ -575,6 +598,9 @@ def create_digest_reel(articles, image_paths, lang="en"):
     from moviepy import ColorClip, CompositeVideoClip
     background = ColorClip(size=(1080, 1920), color=(12, 5, 8)).with_duration(final_video.duration)
     final_video_padded = CompositeVideoClip([background, final_video.with_position("center")]).with_audio(mixed_audio)
+    
+    # 6. Apply thin progress bar across top edge
+    final_video_padded = overlay_progress_bar(final_video_padded, height=8, color=(230, 30, 45))
     
     video_path = str(OUTPUT_DIR / f"digest_reel_{lang}_{datetime.now().strftime('%H%M%S')}.mp4")
     
