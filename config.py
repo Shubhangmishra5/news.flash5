@@ -58,7 +58,13 @@ DISCORD_WEBHOOK_URL_HINDI = _env("DISCORD_WEBHOOK_URL_HINDI", "YOUR_DISCORD_WEBH
 
 # Voiceover Settings (Edge-TTS)
 VOICE_EN = _env("VOICE_EN", "en-US-AndrewNeural")
+VOICE_EN_MALE = _env("VOICE_EN_MALE", "en-US-AndrewNeural")
+VOICE_EN_FEMALE = _env("VOICE_EN_FEMALE", "en-US-AvaNeural")
+
 VOICE_HI = _env("VOICE_HI", "hi-IN-MadhurNeural")
+VOICE_HI_MALE = _env("VOICE_HI_MALE", "hi-IN-MadhurNeural")
+VOICE_HI_FEMALE = _env("VOICE_HI_FEMALE", "hi-IN-SwaraNeural")
+
 VOICE_RATE = _env("VOICE_RATE", "-1%")
 VOICE_PITCH = _env("VOICE_PITCH", "-1Hz")
 

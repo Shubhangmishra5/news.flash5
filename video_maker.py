@@ -179,42 +179,67 @@ def overlay_subtitles(video_clip, srt_content):
 
     def add_subtitles_to_frame(frame, t):
         # Find active caption at time t
-        active_text = ""
+        active_sub = None
         for sub in subtitles:
             if sub["start"] <= t <= sub["end"]:
-                active_text = sub["text"]
+                active_sub = sub
                 break
                 
-        if not active_text:
+        if not active_sub or not active_sub.get("text"):
             return frame
 
-        # Convert numpy array frame to PIL
+        active_text = active_sub["text"].strip()
         img = Image.fromarray(frame)
-        draw = ImageDraw.Draw(img)
+        draw = ImageDraw.Draw(img, "RGBA")
         w, h = img.size
 
-        # Wrap text perfectly for vertical width
-        wrapped_lines = textwrap.wrap(active_text, width=24)
+        words = active_text.split()
+        if not words:
+            return frame
+
+        # Compute current spoken word index within the active subtitle chunk
+        sub_dur = max(0.1, active_sub["end"] - active_sub["start"])
+        sub_progress = min(max((t - active_sub["start"]) / sub_dur, 0.0), 0.99)
+        active_word_idx = min(int(sub_progress * len(words)), len(words) - 1)
+
+        wrapped_lines = textwrap.wrap(active_text, width=22)
         
         # Center subtitles near bottom (safe zone y = 1320)
         y_start = 1320
+        curr_word_count = 0
         for line in wrapped_lines:
-            bbox = draw.textbbox((0, 0), line, font=font)
-            line_w = bbox[2] - bbox[0]
-            line_h = bbox[3] - bbox[1]
-            x_coord = (w - line_w) // 2
+            line_words = line.split()
+            # Calculate total width for line centering
+            line_w = sum(draw.textbbox((0, 0), w + " ", font=font)[2] for w in line_words)
+            line_h = draw.textbbox((0, 0), "Ag", font=font)[3]
+            x_start = (w - line_w) // 2
 
-            # Black heavy outline/drop shadow for maximum readability
-            shadow_offset = 4
-            for dx in [-shadow_offset, 0, shadow_offset]:
-                for dy in [-shadow_offset, 0, shadow_offset]:
-                    draw.text((x_coord + dx, y_start + dy), line, font=font, fill=(0, 0, 0))
+            x_curr = x_start
+            for idx, word in enumerate(line_words):
+                w_bbox = draw.textbbox((0, 0), word + " ", font=font)
+                word_w = w_bbox[2] - w_bbox[0]
+                
+                is_active = (curr_word_count == active_word_idx)
+                curr_word_count += 1
+                
+                if is_active:
+                    # Spoken word highlighted with black rounded background pill & yellow text
+                    draw.rounded_rectangle(
+                        [x_curr - 6, y_start - 4, x_curr + word_w - 6, y_start + line_h + 4],
+                        radius=8,
+                        fill=(10, 11, 16, 230)
+                    )
+                    draw.text((x_curr, y_start), word, font=font, fill=(255, 235, 59))
+                else:
+                    # Inactive word with drop shadow & clean off-white text
+                    draw.text((x_curr + 3, y_start + 3), word, font=font, fill=(0, 0, 0))
+                    draw.text((x_curr, y_start), word, font=font, fill=(245, 245, 247))
+                    
+                x_curr += word_w
 
-            # Draw gorgeous bright yellow subtitle text
-            draw.text((x_coord, y_start), line, font=font, fill=(255, 235, 59))
-            y_start += line_h + 15
+            y_start += line_h + 16
 
-        return np.array(img)
+        return np.array(img.convert("RGB"))
 
     return video_clip.transform(lambda gf, t: add_subtitles_to_frame(gf(t), t))
 
@@ -295,13 +320,14 @@ async def generate_voiceover(text, output_audio_path, lang="en"):
         clean_text = clean_text.replace(" - ", ", ").replace(" -- ", ", ")
 
     try:
+        import random
+        from config import VOICE_EN_MALE, VOICE_EN_FEMALE, VOICE_HI_MALE, VOICE_HI_FEMALE
         if lang == "hi":
-            voice = VOICE_HI
+            voice = random.choice([VOICE_HI_MALE, VOICE_HI_FEMALE])
         else:
-            voice = VOICE_EN
+            voice = random.choice([VOICE_EN_MALE, VOICE_EN_FEMALE])
             
         # Voice micro-jitter pitch & rate randomization for unique audio fingerprint per news story
-        import random
         rate_jitter = random.choice(["-2%", "-1%", "-1%", "+0%"])
         pitch_jitter = random.choice(["-2Hz", "-1Hz", "-1Hz", "+0Hz"])
         communicate = edge_tts.Communicate(clean_text, voice, rate=rate_jitter, pitch=pitch_jitter)
